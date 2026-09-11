@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fajitex · Dashboard digital B2C</title>
+<meta name="description" content="Dashboard diario de resultados digitales B2C de Fajitex. Versión con datos de ejemplo.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%230B0B0B'/%3E%3Cpath d='M11 24V10h9v3h-5.5v3H19v3h-4.5v5z' fill='%238B3A8E'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Familjen+Grotesk:ital,wght@0,400;0,500;0,600;1,400&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<!-- Aviso permanente: esta versión no está conectada a datos reales -->
+<div class="aviso-ejemplo" role="status">
+  <div class="envoltura">
+    <strong>Datos de ejemplo — pendiente conexión real.</strong>
+    <span>Las cifras son ilustrativas y no corresponden a resultados de Fajitex. Fase 2: Shopify, Meta Ads y el reporte manual de Kuvady.</span>
+  </div>
+</div>
+
+<header class="cabecera">
+  <div class="envoltura">
+    <div class="marca">
+      <div class="marca__logo">faji<em>tex</em></div>
+      <div class="marca__sub">Resultados digitales · B2C</div>
+    </div>
+
+    <div class="periodo">
+      <div class="periodo__rango" id="periodo-rango">—</div>
+      <div class="conmutador" role="group" aria-label="Periodo de análisis">
+        <button type="button" data-periodo="semana" aria-pressed="true">Semana</button>
+        <button type="button" data-periodo="mes" aria-pressed="false">Acumulado del mes</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ================================================== RESUMEN GENERAL === -->
+  <section class="seccion envoltura" aria-labelledby="t-resumen">
+    <div class="seccion__encabezado">
+      <h2 id="t-resumen">Resumen general</h2>
+      <p class="seccion__nota">El color de cada tarjeta es el estado del indicador: no hay que interpretar la cifra para saber si va bien.</p>
+    </div>
+
+    <div class="resumen">
+      <article class="hero" id="hero" data-estado="meta">
+        <div>
+          <div class="hero__etiqueta">Ingreso neto total · Shopify</div>
+          <span class="hero__cifra" id="hero-cifra">—</span>
+          <div class="hero__comparativo" id="hero-comparativo"></div>
+
+          <div class="hero__medidor">
+            <div class="hero__pista">
+              <div class="hero__relleno" id="hero-relleno" style="width:0%"></div>
+              <div class="hero__marca-meta" id="hero-marca-meta" style="left:100%"></div>
+            </div>
+            <div class="hero__pie">
+              <span id="hero-cumplimiento"></span>
+              <span id="hero-meta"></span>
+            </div>
+          </div>
+        </div>
+
+        <p class="hero__lectura" id="hero-lectura"></p>
+      </article>
+
+      <div class="kpis" id="kpis"></div>
+    </div>
+
+    <div class="leyenda-semaforo" aria-label="Referencia del semáforo">
+      <span class="muestra"><i style="background:var(--st-meta-fill)"></i> En meta</span>
+      <span class="muestra"><i style="background:var(--st-alerta-fill)"></i> Alerta</span>
+      <span class="muestra"><i style="background:var(--st-critico-fill)"></i> Crítico</span>
+      <span id="leyenda-umbrales"></span>
+    </div>
+  </section>
+
+  <!-- ===================================================== CANAL / SERIE === -->
+  <section class="seccion envoltura" aria-labelledby="t-canales">
+    <div class="seccion__encabezado">
+      <h2 id="t-canales">Ventas por canal</h2>
+      <p class="seccion__nota">Atribución de Shopify. “Otro” agrupa marketplace, referidos y ventas asistidas.</p>
+    </div>
+
+    <div class="rejilla-graficas">
+      <article class="panel">
+        <div class="panel__cabecera">
+          <h3 class="panel__titulo">Participación por canal</h3>
+          <p class="panel__sub" id="dona-sub">—</p>
+        </div>
+        <div class="lienzo lienzo--dona"><canvas id="grafica-dona"></canvas></div>
+        <div class="leyenda" id="leyenda-dona"></div>
+
+        <details class="ver-datos">
+          <summary>Ver datos en tabla</summary>
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead><tr><th>Canal</th><th>Ingreso neto</th><th>Participación</th></tr></thead>
+              <tbody id="tabla-dona"></tbody>
+            </table>
+          </div>
+        </details>
+      </article>
+
+      <article class="panel">
+        <div class="panel__cabecera">
+          <h3 class="panel__titulo">Ventas por canal y crecimiento del total</h3>
+          <p class="panel__sub">Columnas apiladas por canal; la línea es el total de la semana. Ambas series comparten el mismo eje en pesos, así que la trayectoria de la línea es el crecimiento real. La banda marca el tramo que cubre el periodo seleccionado.</p>
+        </div>
+        <div class="lienzo lienzo--combinado"><canvas id="grafica-combinada"></canvas></div>
+        <div class="leyenda" id="leyenda-combinada"></div>
+
+        <p class="panel__sub" style="margin-top:10px">Semanas calendario de lunes a domingo. El acumulado del mes va del 1 al 11 de septiembre —los primeros días de S36 más toda S37—, por eso no equivale a la suma de semanas completas.</p>
+
+        <details class="ver-datos">
+          <summary>Ver datos en tabla</summary>
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead><tr><th>Semana</th><th>Pauta digital</th><th>Orgánico/Directo</th><th>Otro</th><th>Total</th><th>Crecimiento</th></tr></thead>
+              <tbody id="tabla-combinada"></tbody>
+            </table>
+          </div>
+        </details>
+      </article>
+    </div>
+  </section>
+
+  <!-- ======================================================= CATEGORÍAS === -->
+  <section class="seccion envoltura" aria-labelledby="t-categorias">
+    <div class="seccion__encabezado">
+      <h2 id="t-categorias">Categorías</h2>
+      <p class="seccion__nota">Clic en una categoría para ver los códigos de descuento usados y las notas del periodo.</p>
+    </div>
+
+    <div class="categorias">
+      <article class="panel">
+        <div class="panel__cabecera">
+          <h3 class="panel__titulo">Margen bruto unitario por categoría</h3>
+          <p class="panel__sub">Cada barra lleva su propio color de estado. La línea punteada es el umbral de meta (55%).</p>
+        </div>
+        <div class="lienzo lienzo--categorias"><canvas id="grafica-categorias"></canvas></div>
+      </article>
+
+      <div class="cat-lista" id="cat-lista"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ LEADS === -->
+  <section class="seccion envoltura" aria-labelledby="t-leads">
+    <div class="seccion__encabezado">
+      <h2 id="t-leads">Leads por canal</h2>
+      <p class="seccion__nota" id="leads-nota">—</p>
+    </div>
+
+    <article class="panel">
+      <div class="leads" id="leads-lista"></div>
+    </article>
+  </section>
+
+  <!-- =========================================================== NOTAS === -->
+  <footer class="pie">
+    <div class="envoltura pie__rejilla">
+      <div>
+        <h3>Cómo se calcula</h3>
+        <ul>
+          <li>Margen bruto de pauta = utilidad bruta de pauta ÷ ventas atribuidas a pauta.</li>
+          <li>Múltiplo invertido = ganancia neta de pauta ÷ inversión en pauta.</li>
+          <li>Costo unitario de pauta = inversión del periodo rateada por categoría ÷ unidades vendidas de la categoría.</li>
+          <li>Margen bruto unitario = (precio de venta − costo) ÷ precio de venta.</li>
+          <li>Mientras Shopify no entregue el costo por pedido, la utilidad bruta de pauta se estima aplicando el margen bruto ponderado del periodo a las ventas atribuidas.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Alcance de esta versión</h3>
+        <ul>
+          <li>Solo B2C. No incluye B2B.</li>
+          <li>Fuera de alcance: Línea Masculina, Línea Médica, Accesorios y productos sin <code>product_type</code> en Shopify.</li>
+          <li>Categorías: Fajas, Short, Cinturilla y Brasier.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Fuentes (fase 2)</h3>
+        <ul>
+          <li>Ingresos y descuentos: Shopify.</li>
+          <li>Inversión y atribución: Meta Ads.</li>
+          <li>Leads: reporte semanal manual de Kuvady, no es dato en vivo.</li>
+        </ul>
+        <p style="margin-top:10px">Actualizado: <span id="pie-actualizado">—</span></p>
+      </div>
+    </div>
+  </footer>
+
+</main>
+
+<div id="tooltip-grafica" role="tooltip" aria-hidden="true"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="data/sample-data.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
