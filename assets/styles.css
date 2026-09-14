@@ -357,3 +357,104 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .leads { grid-template-columns: 1fr; gap: 20px; }
   .cat-detalle { padding-inline: 15px 15px; }
 }
+
+/* =============================================================================
+   Fase 2 · estados de datos
+   Un dato que no se pudo calcular no es un cero ni un mal resultado: tiene su
+   propio tratamiento neutro, para que el semáforo no diga algo que no sabe.
+   ========================================================================== */
+
+:root {
+  --st-nd-fill: #A79C8C;
+  --st-nd-ink:  #6B6153;
+  --st-nd-deep: #39322B;
+  --st-nd-tint: #F2EFEA;
+}
+
+/* ---------------------------------------------------- aviso de origen ----- */
+.aviso-datos { font-size: 13px; letter-spacing: .01em; padding-block: 9px; }
+.aviso-datos .envoltura { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.aviso-datos strong { font-weight: 600; }
+
+.aviso-datos[data-tipo='ejemplo'] { background: var(--chocolate); color: var(--arena); }
+.aviso-datos[data-tipo='ejemplo'] strong { color: var(--blanco); }
+
+.aviso-datos[data-tipo='real'] { background: var(--negro); color: var(--gris-claro); }
+.aviso-datos[data-tipo='real'] strong { color: var(--champagne); }
+
+/* ------------------------------------------------- avisos de calidad ------ */
+.calidad { background: var(--st-alerta-tint); border-bottom: 1px solid var(--hairline); }
+.calidad > summary {
+  cursor: pointer; list-style: none;
+  max-width: 1240px; margin: 0 auto; padding: 11px 20px;
+  display: flex; align-items: center; gap: 9px;
+  font-size: 13px; font-weight: 500; color: var(--st-alerta-ink);
+}
+.calidad > summary::-webkit-details-marker { display: none; }
+.calidad > summary::after { content: 'ver'; margin-left: auto; font-weight: 400; opacity: .7; }
+.calidad[open] > summary::after { content: 'ocultar'; }
+.calidad__punto { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--st-alerta-fill); }
+.calidad__punto[data-nivel='alto'] { background: var(--st-critico-fill); }
+
+.calidad__lista {
+  max-width: 1240px; margin: 0 auto; padding: 0 20px 16px; list-style: none;
+  display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+}
+.calidad__lista li {
+  border-left: 3px solid var(--st-alerta-fill); padding: 2px 0 2px 11px;
+  display: grid; gap: 2px; font-size: 12.5px;
+}
+.calidad__lista li[data-nivel='alto'] { border-left-color: var(--st-critico-fill); }
+.calidad__lista b { font-weight: 600; color: var(--tinta); }
+.calidad__lista span { color: var(--tinta-media); line-height: 1.45; }
+
+/* ------------------------------------------------------- estado sin dato -- */
+.hero[data-estado='nd'] { background: var(--st-nd-deep); }
+.kpi[data-estado='nd'] { border-left-color: var(--st-nd-fill); background: var(--st-nd-tint); }
+.kpi[data-estado='nd'] .kpi__barra span { background: var(--st-nd-fill); }
+.pill[data-estado='nd'] { color: var(--st-nd-ink); background: var(--st-nd-tint); }
+.cat-fila[data-estado='nd'] .cat-resumen { border-left-color: var(--st-nd-fill); }
+.cat-metrica__valor[data-estado='nd'] { color: var(--st-nd-ink); }
+.cat-mini span[data-estado='nd'] { background: var(--st-nd-fill); }
+
+.kpi__cifra--nd { color: var(--st-nd-ink); font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }
+.kpi__barra--nd { background: repeating-linear-gradient(135deg, rgba(11,11,11,.05) 0 4px, transparent 4px 8px); }
+
+.kpi__marca {
+  margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--st-alerta-ink);
+  background: var(--st-alerta-tint); border-left: 2px solid var(--st-alerta-fill);
+  padding: 6px 9px; border-radius: 0 2px 2px 0;
+}
+.kpi[data-estado='alerta'] .kpi__marca { background: rgba(255,255,255,.6); }
+
+.hero__sin-meta { font-size: 12.5px; color: var(--arena); line-height: 1.45; }
+.hero__sin-meta code { font-family: inherit; color: var(--champagne); }
+
+/* ------------------------------------------------ bloque "sin dato" ------- */
+.sin-dato {
+  border: 1px dashed var(--gris-claro); border-radius: 3px;
+  padding: 22px 20px; display: grid; gap: 8px; align-content: center;
+  min-height: 190px; background: var(--st-nd-tint);
+}
+.sin-dato__titulo { font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: -0.02em; color: var(--st-nd-ink); }
+.sin-dato__texto { font-size: 13px; color: var(--tinta-media); line-height: 1.5; max-width: 52ch; }
+.sin-dato__accion { font-size: 13px; color: var(--tinta); line-height: 1.5; max-width: 52ch; border-left: 2px solid var(--morado); padding-left: 10px; }
+
+/* --------------------------------------------- cobertura por categoría ---- */
+.cat-cobertura {
+  font-size: 12px; color: var(--st-alerta-ink); background: var(--st-alerta-tint);
+  padding: 6px 18px 6px 21px; border-top: 1px solid var(--hairline-alt);
+}
+.cat-nota--falta { margin-top: 10px; font-size: 12.5px; color: var(--tinta-suave); }
+.nota-falta { color: var(--st-alerta-ink); }
+
+.cat-fila--sc { background: var(--fondo); }
+.cat-resumen--estatico { cursor: default; }
+.cat-resumen--estatico:hover { background: transparent; }
+
+@media (max-width: 720px) {
+  .cat-cobertura { padding-inline: 15px; }
+  .calidad__lista { grid-template-columns: 1fr; }
+}
+
+.kpi__sin-umbral { font-size: 11.5px; color: var(--tinta-suave); font-style: italic; }

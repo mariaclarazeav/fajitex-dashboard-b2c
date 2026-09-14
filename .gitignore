@@ -1,0 +1,7 @@
+# Los CSV que deja la coordinadora son datos de negocio en bruto: no se
+# versionan. Lo que sí se publica es el agregado (data/dashboard-data.js).
+data/entrada/*.csv
+data/entrada/*.tsv
+data/entrada/*.txt
+data/.prueba-salida.js
+node_modules/

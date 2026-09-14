@@ -3,9 +3,18 @@
 Dashboard diario de resultados digitales B2C. Publicado con GitHub Pages, sin
 paso de compilación: HTML, CSS y JS planos, con Chart.js por CDN.
 
-> **Fase 1 — datos de ejemplo.** Las cifras que se ven son ilustrativas y no
-> corresponden a resultados de Fajitex. La conexión a Shopify, Meta Ads y al
-> reporte manual de Kuvady es la fase 2.
+> **Estado: fase 2 — carga manual.** El repo trae datos de ejemplo sembrados.
+> Para pasar a datos reales, deja los CSV en `data/entrada/` y corre
+> `node scripts/ingesta.mjs`. No hay conexión API todavía.
+
+## ⚠️ Antes de publicar con datos reales
+
+Un sitio de GitHub Pages en un repositorio **público** es visible para
+cualquiera, y `data/dashboard-data.js` contiene ingresos, márgenes, costos e
+inversión en pauta. Antes de cargar datos reales, pon el repositorio en
+**privado** y usa GitHub Pages con acceso restringido (requiere plan de pago),
+o publica el dashboard en un hosting con autenticación. Los CSV en bruto de
+`data/entrada/` ya están en `.gitignore` y no se suben.
 
 ## Qué muestra
 
@@ -53,12 +62,34 @@ CVD y contraste sobre la superficie).
 ## Estructura
 
 ```
-index.html              Vista única
-assets/styles.css       Tokens de marca, semáforo y layout
-assets/app.js           Derivación de indicadores, semáforo y gráficas
-data/sample-data.js     Cifras primarias de ejemplo (window.FAJITEX_DATA)
-scripts/                Ingesta de datos — fase 2 (ver scripts/README.md)
+index.html                Vista única
+assets/styles.css         Tokens de marca, semáforo y layout
+assets/app.js             Derivación de indicadores, semáforo y gráficas
+data/dashboard-data.js    Lo que carga el dashboard (lo genera la ingesta)
+data/sample-data.js       Semilla de ejemplo, para volver atrás
+data/umbrales.json        Umbrales del semáforo
+data/entrada/             Aquí van los CSV manuales (no se versionan)
+scripts/                  Ingesta y pruebas (ver scripts/README.md)
 ```
+
+## Cargar datos reales
+
+```bash
+# 1. deja los 4 CSV en data/entrada/  (ver data/entrada/LEEME.md)
+node scripts/ingesta.mjs    # genera data/dashboard-data.js e imprime el informe
+node scripts/pruebas.mjs    # 22 pruebas de las reglas de negocio
+```
+
+El script identifica cada archivo por su encabezado, tolera separadores `,` `;`
+y tabulador, números en formato colombiano y filas de adorno antes de la tabla.
+
+Todo lo que no se pueda calcular con los archivos cargados se muestra como
+**"Sin dato" con el motivo**, nunca relleno con un supuesto. Hoy eso incluye el
+margen bruto de pauta y el múltiplo invertido, que necesitan canal por pedido en
+el export de Shopify. El detalle está en `scripts/README.md`.
+
+Las reglas editables —mapeo de categorías, referencias excluidas, campañas B2B,
+metas comerciales— viven todas en `scripts/config.mjs`.
 
 ## Correr en local
 
@@ -74,10 +105,17 @@ python3 -m http.server 8000
 En **Settings → Pages**, elegir *Deploy from a branch*, la rama del proyecto y la
 carpeta `/ (root)`. El archivo `.nojekyll` evita que Jekyll procese el sitio.
 
-## Pendiente para la fase 2
+## Pendiente
 
-- Conectar Shopify, Meta Ads y el reporte manual de Kuvady (`scripts/`).
-- Reemplazar `data/sample-data.js` con datos reales y poner `meta.esEjemplo` en `false`.
-- Quitar el aviso "Datos de ejemplo" de `index.html`.
+- **Canal por pedido en el export de Shopify.** Desbloquea la dona de canal, las
+  columnas apiladas por canal, el margen bruto de pauta y el múltiplo invertido.
+- **Archivo de costos de la línea Luxury** (referencias que empiezan en 2 o 5).
+  Al dejarlo en `data/entrada/` la cobertura de Fajas sube sola.
+- **Confirmar el mapeo de "Trusa"** a una de las 4 categorías, o dejarlo fuera
+  de alcance de forma explícita.
+- **Confirmar si la campaña** `Mensajes a Wpp | Sector Médico y Estético | Sep 2026 Campaña`
+  es B2B o B2C. Hoy entra al total marcada como pendiente.
+- **Metas comerciales y presupuesto de pauta** en `scripts/config.mjs → METAS`.
+- **Reporte semanal de leads** (Kuvady), que hoy no tiene archivo de entrada.
 - Confirmar los códigos de color exactos contra el manual de marca: los hex
   actuales son una lectura aproximada de la referencia visual.
