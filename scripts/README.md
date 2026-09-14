@@ -20,6 +20,29 @@ con todo lo que quedó incompleto.
 | `pruebas.mjs` | 22 pruebas que fijan cada regla de negocio. |
 | `fixtures/` | CSV **inventados** para probar. No son datos de Fajitex. |
 
+## Formatos de los archivos reales
+
+Los tres exports usan convenciones distintas y el punto significa cosas
+opuestas según el archivo:
+
+| Archivo | Número | Fecha |
+|---|---|---|
+| Shopify | `340084.03` — punto decimal | `2026-09-13` |
+| Meta | `3.731262` — punto decimal, sin miles | `2026-08-19` |
+| Google | `179.090 COP` — punto de **miles**, `"7,00"` decimal | `"mié, 1 jul 2026"` |
+
+Por eso el formato numérico se decide **una vez por archivo**, mirando el
+conjunto de sus valores (`detectarFormato`), no valor por valor: `179.090` y
+`3.731262` son indistinguibles aisladas. También se normaliza el espacio duro
+de `179.090 COP` y se traducen los meses en español de las fechas de Google.
+
+**Shopify exporta el descuento en negativo** (`-68016.8`). La ingesta lo guarda
+como magnitud positiva para que el ingreso neto sea bruto − descuento.
+
+**Filas con 0 unidades y con ingreso** (ajustes o cambios) no se descartan: su
+ingreso entra a los totales aunque no sumen unidades. Solo se ignoran las filas
+completamente en cero.
+
 ## Reglas implementadas
 
 **Categorías** — el mapeo vive en `config.mjs → MAPEO_CATEGORIA`.
@@ -66,12 +89,34 @@ Cuando una fila de Meta cubre un rango de fechas más ancho que el periodo, el
 gasto se reparte por días, asumiendo gasto diario uniforme dentro del rango
 reportado. Es la única repartición posible con las columnas disponibles.
 
+## MER y lectura de pauta
+
+**MER** = ingreso neto de Shopify ÷ inversión. Es el KPI hero porque no depende
+de lo que cada plataforma se atribuya. La base es la inversión de Meta
+(`config.mjs → MER.base`); la tarjeta muestra también el MER contra la inversión
+total como referencia.
+
+El **ROAS de plataforma** aparece solo en la lectura de pauta, marcado como dato
+reportado por Meta. En la carga actual Meta y Google se atribuyen entre las dos
+$346,1 M en ventas contra $129,8 M que vendió la tienda: se están apuntando la
+misma venta más de una vez, y el dashboard lo dice explícitamente.
+
+**Lectura de pauta** es una tabla semana a semana de Meta, en las semanas que
+reporta Meta (miércoles a martes), no en semanas ISO: reagruparlas inventaría
+una precisión que el archivo no tiene.
+
+Una semana se marca **fuera de rango** cuando su CPA supera la valla de Tukey
+`Q3 + k·IQR` sobre las semanas del periodo (`config.mjs → ATIPICOS.k`, hoy 1,0).
+Es una regla estadística estándar, no un número puesto a mano que haya que
+mover cada mes. En la carga actual marca el 12 y el 19 de agosto.
+
 ## Lo que estos archivos no permiten calcular
 
 El export de Shopify **no trae canal por pedido**. Sin eso no hay forma de saber
 qué parte del ingreso vino de pauta, y sin eso no existen:
 
-- la dona de participación por canal,
+- la participación de **ventas** por canal — la dona muestra en su lugar el
+  reparto de la **inversión** entre plataformas, que sí es un dato duro,
 - las columnas apiladas por canal (quedan como ingreso neto total por semana),
 - el **margen bruto de pauta**,
 - el **múltiplo invertido**.
@@ -87,6 +132,11 @@ parcial y engañosa: no se usa para el mix.
 **Metas comerciales.** No vinieron en los archivos. Están en `config.mjs → METAS`
 en `null`, y mientras sigan así el hero muestra el ingreso sin semáforo de
 cumplimiento y la tarjeta de inversión sin % de presupuesto.
+
+**Objetivo de MER.** También en `null`, y a propósito: un umbral de MER no se
+puede inventar porque depende del margen bruto. El punto de equilibrio es
+1 ÷ margen bruto. Cuando llegue el archivo de costos se puede calcular y ponerlo
+en `METAS.merObjetivo`; hasta entonces el MER se muestra sin semáforo.
 
 **Leads.** El reporte semanal manual de Kuvady no está entre los archivos de
 entrada, así que ese bloque queda vacío con su explicación.

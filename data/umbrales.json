@@ -1,8 +1,32 @@
 {
-  "cumplimientoIngreso":  { "meta": 1.00, "alerta": 0.85, "direccion": "mayorMejor" },
-  "cumplimientoPauta":    { "meta": 1.00, "alerta": 1.10, "direccion": "menorMejor" },
-  "margenBrutoPauta":     { "meta": 0.55, "alerta": 0.45, "direccion": "mayorMejor" },
-  "multiploInvertido":    { "meta": 1.50, "alerta": 1.00, "direccion": "mayorMejor" },
-  "margenBrutoUnitario":  { "meta": 0.55, "alerta": 0.45, "direccion": "mayorMejor" },
-  "costoUnitarioPauta":   { "meta": 15000, "alerta": 25000, "direccion": "menorMejor" }
+  "cumplimientoIngreso": {
+    "meta": 1.0,
+    "alerta": 0.85,
+    "direccion": "mayorMejor"
+  },
+  "cumplimientoPauta": {
+    "meta": 1.0,
+    "alerta": 1.1,
+    "direccion": "menorMejor"
+  },
+  "margenBrutoPauta": {
+    "meta": 0.55,
+    "alerta": 0.45,
+    "direccion": "mayorMejor"
+  },
+  "multiploInvertido": {
+    "meta": 1.5,
+    "alerta": 1.0,
+    "direccion": "mayorMejor"
+  },
+  "margenBrutoUnitario": {
+    "meta": 0.55,
+    "alerta": 0.45,
+    "direccion": "mayorMejor"
+  },
+  "costoUnitarioPauta": {
+    "meta": 15000,
+    "alerta": 25000,
+    "direccion": "menorMejor"
+  }
 }

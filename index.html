@@ -72,7 +72,7 @@
   <!-- ===================================================== CANAL / SERIE === -->
   <section class="seccion envoltura" aria-labelledby="t-canales">
     <div class="seccion__encabezado">
-      <h2 id="t-canales">Ventas por canal</h2>
+      <h2 id="t-canales">Inversión y ventas</h2>
       <p class="seccion__nota" id="nota-canales"></p>
     </div>
 
@@ -81,8 +81,8 @@
 
       <article class="panel">
         <div class="panel__cabecera">
-          <h3 class="panel__titulo">Ventas por canal y crecimiento del total</h3>
-          <p class="panel__sub">Columnas apiladas por canal; la línea es el total de la semana. Ambas series comparten el mismo eje en pesos, así que la trayectoria de la línea es el crecimiento real. La banda marca el tramo que cubre el periodo seleccionado.</p>
+          <h3 class="panel__titulo" id="titulo-combinada"></h3>
+          <p class="panel__sub" id="sub-combinada"></p>
         </div>
         <div class="lienzo lienzo--combinado"><canvas id="grafica-combinada"></canvas></div>
         <div class="leyenda" id="leyenda-combinada"></div>
@@ -110,16 +110,35 @@
     </div>
 
     <div class="categorias">
-      <article class="panel">
-        <div class="panel__cabecera">
-          <h3 class="panel__titulo">Margen bruto unitario por categoría</h3>
-          <p class="panel__sub">Cada barra lleva su propio color de estado. La línea punteada es el umbral de meta (55%). <span id="nota-categorias"></span></p>
-        </div>
-        <div class="lienzo lienzo--categorias"><canvas id="grafica-categorias"></canvas></div>
-      </article>
+      <article class="panel" id="panel-categorias"></article>
 
       <div class="cat-lista" id="cat-lista"></div>
     </div>
+  </section>
+
+  <!-- ================================================= LECTURA DE PAUTA === -->
+  <section class="seccion envoltura" aria-labelledby="t-pauta" id="seccion-pauta" hidden>
+    <div class="seccion__encabezado">
+      <h2 id="t-pauta">Lectura de pauta</h2>
+      <p class="seccion__nota">Semana a semana de Meta, en todo el rango cargado. No cambia con el conmutador de arriba: es la serie completa.</p>
+    </div>
+
+    <article class="panel">
+      <p class="panel__sub" id="pauta-nota"></p>
+      <div class="tabla-envoltura">
+        <table class="tabla tabla--pauta">
+          <thead>
+            <tr>
+              <th>Semana</th><th>Gasto</th><th>Compras</th><th>CPA</th><th>CTR</th>
+              <th>ROAS <span class="th-nota">Meta</span></th>
+            </tr>
+          </thead>
+          <tbody id="pauta-cuerpo"></tbody>
+          <tfoot id="pauta-pie"></tfoot>
+        </table>
+      </div>
+      <p class="pauta-aviso" id="pauta-roas-aviso"></p>
+    </article>
   </section>
 
   <!-- ============================================================ LEADS === -->
@@ -140,6 +159,8 @@
       <div>
         <h3>Cómo se calcula</h3>
         <ul>
+          <li>MER = ingreso neto de Shopify ÷ inversión en pauta. Es la lectura que no se sobreestima: no depende de lo que cada plataforma se atribuya.</li>
+          <li>CPA = gasto de Meta ÷ compras que reporta Meta.</li>
           <li>Margen bruto de pauta = utilidad bruta de pauta ÷ ventas atribuidas a pauta.</li>
           <li>Múltiplo invertido = ganancia neta de pauta ÷ inversión en pauta.</li>
           <li>Costo unitario de pauta = inversión del periodo rateada por categoría ÷ unidades vendidas de la categoría.</li>

@@ -87,8 +87,29 @@ export const METAS = {
   ingresoNetoSemana: null,
   ingresoNetoMes: null,
   presupuestoPautaSemana: null,
-  presupuestoPautaMes: null
+  presupuestoPautaMes: null,
+
+  /* Objetivo de MER. Se deja en null a propósito: un umbral de MER no se puede
+     inventar, depende del margen bruto. El punto de equilibrio es
+     1 ÷ margen bruto (con 55% de margen, MER 1,82 empata; por debajo se pierde
+     plata). Cuando llegue el archivo de costos se puede calcular y ponerlo
+     aquí; mientras tanto el MER se muestra sin semáforo. */
+  merObjetivo: null,
+  merAlerta: null
 };
+
+/* -------------------------------------------------------- lectura de pauta -- */
+
+/* Una semana se marca "fuera de rango" cuando su CPA supera la valla de Tukey
+   Q3 + k·IQR sobre el conjunto de semanas del periodo. Es una regla estándar
+   de detección de atípicos: no se fija un número a mano que luego haya que
+   mover cada mes. Subir k marca menos semanas. */
+export const ATIPICOS = { k: 1.0, metrica: 'cpa' };
+
+/* El MER se define contra la inversión de Meta, no contra el total de pauta:
+   es la lectura que pidió la coordinación. El MER sobre Meta + Google se
+   calcula igual y se muestra como referencia dentro de la misma tarjeta. */
+export const MER = { base: 'meta' };
 
 export const CATEGORIAS = ['Fajas', 'Short', 'Cinturilla', 'Brasier'];
 export const SIN_CLASIFICAR = 'Sin clasificar';

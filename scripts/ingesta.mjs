@@ -18,12 +18,12 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parsearCSV, aObjetos, columna, numero, fecha, semanaISO, normalizar } from './lib/csv.mjs';
+import { parsearCSV, aObjetos, columna, numero, detectarFormato, fecha, semanaISO, normalizar } from './lib/csv.mjs';
 import {
   partirSKU, esLuxury, clasificar, indexarCostos, buscarCosto,
   clasificarCampana, repartirPauta, gastoEnVentana
 } from './lib/reglas.mjs';
-import { MAPEO_CATEGORIA, METAS, CATEGORIAS, SIN_CLASIFICAR, REFERENCIAS_EXCLUIDAS } from './config.mjs';
+import { MAPEO_CATEGORIA, METAS, CATEGORIAS, SIN_CLASIFICAR, REFERENCIAS_EXCLUIDAS, ATIPICOS, MER, CAMPANAS_POR_CATEGORIA } from './config.mjs';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 /* El directorio de entrada y el de salida se pueden redirigir para poder
@@ -56,10 +56,24 @@ function leerEntrada(dir) {
   return encontrados;
 }
 
+/* Detecta el formato numérico mirando todas las celdas del archivo. */
+function formatoDe(archivos, columnas) {
+  const muestra = [];
+  for (const { filas } of archivos) {
+    /* Se exigen TODAS las columnas clave, igual que al cargar: con una sola,
+       una fila de adorno como "Intervalo de fechas: ..." pasa por encabezado. */
+    for (const o of aObjetos(filas, columnas)) {
+      for (const v of Object.values(o)) if (muestra.length < 4000) muestra.push(v);
+    }
+  }
+  return detectarFormato(muestra);
+}
+
 /* ================================================== 2. COSTOS POR SKU ==== */
 
 function cargarCostos(archivos) {
   const filas = [];
+  const fmt = formatoDe(archivos, ['Referencia']);
   for (const { filas: brutas } of archivos) {
     for (const o of aObjetos(brutas, ['Referencia'])) {
       filas.push({
@@ -67,7 +81,7 @@ function cargarCostos(archivos) {
         talla: columna(o, 'Detalle ext. 2 (talla)', 'talla') || '',
         color: columna(o, 'Detalle ext. 1 (color)', 'color') || '',
         descripcion: columna(o, 'Desc. item', 'descripcion') || '',
-        costo: numero(columna(o, 'Promedio de Costo prom. unit.', 'Costo prom. unit.', 'costo'))
+        costo: numero(columna(o, 'Promedio de Costo prom. unit.', 'Costo prom. unit.', 'costo'), fmt)
       });
     }
   }
@@ -79,15 +93,22 @@ function cargarCostos(archivos) {
 function cargarVentas(archivos, costos) {
   const lineas = [];
   const excluidas = { unidades: 0, ingresoBruto: 0, porReferencia: {} };
-  let sinReferencia = 0, sinFecha = 0;
+  let sinReferencia = 0, sinFecha = 0, sinUnidadesConIngreso = 0, vacias = 0;
+  const fmt = formatoDe(archivos, ['sku', 'unidades_vendidas']);
 
   for (const { filas: brutas } of archivos) {
     for (const o of aObjetos(brutas, ['sku', 'unidades_vendidas'])) {
       const f = fecha(columna(o, 'fecha'));
       const sku = String(columna(o, 'sku') || '').trim();
-      const unidades = numero(columna(o, 'unidades_vendidas')) || 0;
+      const unidades = numero(columna(o, 'unidades_vendidas'), fmt) || 0;
+      const ingresoBruto = numero(columna(o, 'ingreso_bruto'), fmt) || 0;
       if (!f) { sinFecha++; continue; }
-      if (unidades <= 0) continue;
+
+      /* Una fila sin unidades pero con ingreso es un ajuste o un cambio: su
+         plata es real y no se puede tirar. Solo se descartan las filas
+         completamente en cero. */
+      if (unidades <= 0 && ingresoBruto === 0) { vacias++; continue; }
+      if (unidades <= 0) sinUnidadesConIngreso++;
 
       const { referencia, color, talla } = partirSKU(sku);
       if (!referencia) sinReferencia++;
@@ -96,8 +117,6 @@ function cargarVentas(archivos, costos) {
       const clase = clasificar({
         categoria: columna(o, 'categoria'), referencia, descripcion
       });
-
-      const ingresoBruto = numero(columna(o, 'ingreso_bruto')) || 0;
 
       if (clase.excluida) {
         excluidas.unidades += unidades;
@@ -111,13 +130,17 @@ function cargarVentas(archivos, costos) {
         fecha: f, semana: semanaISO(f), sku, referencia, color, talla,
         bucket: clase.bucket, motivo: clase.motivo,
         unidades, ingresoBruto,
-        descuento: numero(columna(o, 'descuento_aplicado')) || 0,
+        /* Shopify exporta el descuento en negativo. Se guarda siempre como
+           magnitud positiva para que ingreso neto = bruto − descuento. */
+        descuento: Math.abs(numero(columna(o, 'descuento_aplicado'), fmt) || 0),
         codigo: String(columna(o, 'codigo_descuento') || '').trim(),
         costo: buscarCosto(costos.indice, { referencia, color, talla })
       });
     }
   }
 
+  if (sinUnidadesConIngreso) aviso('medio', 'Filas con ingreso y cero unidades',
+    `${sinUnidadesConIngreso} líneas traen ingreso pero 0 unidades (ajustes o cambios). Su ingreso sí entra a los totales; sus unidades, no. Por eso el ingreso por unidad de esas filas no cuadra.`);
   if (sinFecha) aviso('medio', 'Filas sin fecha legible', `${sinFecha} líneas del export de Shopify se descartaron porque la columna fecha no se pudo interpretar.`);
   if (sinReferencia) aviso('alto', 'SKU sin referencia legible', `${sinReferencia} líneas no dejaron extraer una referencia de 6 dígitos del SKU. Esas unidades cuentan en el total pero no cruzan con costos. Ajusta el patrón en scripts/config.mjs → SKU.referencia.`);
   return { lineas, excluidas };
@@ -127,20 +150,25 @@ function cargarVentas(archivos, costos) {
 
 function cargarMeta(archivos) {
   const campanas = [];
+  const fmt = formatoDe(archivos, ['Nombre de la campaña']);
+
   for (const { filas: brutas } of archivos) {
     for (const o of aObjetos(brutas, ['Nombre de la campaña'])) {
       const nombre = String(columna(o, 'Nombre de la campaña') || '').trim();
       if (!nombre) continue;
       const desde = fecha(columna(o, 'Inicio del informe'));
       const hasta = fecha(columna(o, 'Fin del informe')) || desde;
-      const gasto = numero(columna(o, 'Importe gastado (COP)', 'Importe gastado'));
+      const gasto = numero(columna(o, 'Importe gastado (COP)', 'Importe gastado'), fmt);
       if (!desde || gasto == null) continue;
 
       campanas.push({
         nombre, desde, hasta, gasto,
-        clics: numero(columna(o, 'Clics (todos)')),
-        ctr: numero(columna(o, 'CTR (todos)')),
-        costoPorResultado: numero(columna(o, 'Costo por resultados')),
+        clics: numero(columna(o, 'Clics (todos)'), fmt),
+        impresiones: numero(columna(o, 'Impresiones'), fmt),
+        ctr: numero(columna(o, 'CTR (todos)'), fmt),
+        compras: numero(columna(o, 'Compras'), fmt),
+        roasPlataforma: numero(columna(o, 'ROAS de compras'), fmt),
+        costoPorResultado: numero(columna(o, 'Costo por resultados'), fmt),
         indicadorResultado: columna(o, 'Indicador de resultado') || null,
         clase: clasificarCampana(nombre)
       });
@@ -149,18 +177,84 @@ function cargarMeta(archivos) {
   return campanas;
 }
 
+/* Lectura semanal de Meta, en las semanas que reporta Meta (miércoles a
+   martes), no en semanas ISO: reagruparlas inventaría precisión que el
+   archivo no tiene. */
+function lecturaPauta(campanas) {
+  const porSemana = new Map();
+
+  for (const c of campanas) {
+    if (c.clase.tipo === 'b2b') continue;              // el B2B no es lectura B2C
+    const k = c.desde + '|' + c.hasta;
+    if (!porSemana.has(k)) {
+      porSemana.set(k, {
+        desde: c.desde, hasta: c.hasta,
+        gasto: 0, compras: 0, clics: 0, impresiones: 0,
+        valorCompras: 0, pendiente: 0
+      });
+    }
+    const s = porSemana.get(k);
+    s.gasto += c.gasto;
+    s.compras += c.compras || 0;
+    s.clics += c.clics || 0;
+    s.impresiones += c.impresiones || 0;
+    /* El ROAS que reporta Meta es por campaña; para agregarlo por semana hay
+       que volverlo plata (ROAS × gasto) y recomponer el ratio al final. */
+    if (c.roasPlataforma != null) s.valorCompras += c.roasPlataforma * c.gasto;
+    if (c.clase.pendiente) s.pendiente += c.gasto;
+  }
+
+  const semanas = [...porSemana.values()]
+    .sort((a, b) => a.desde < b.desde ? -1 : 1)
+    .map(s => ({
+      desde: s.desde, hasta: s.hasta,
+      gasto: s.gasto,
+      compras: s.compras,
+      cpa: s.compras > 0 ? s.gasto / s.compras : null,
+      ctr: s.impresiones > 0 ? s.clics / s.impresiones : null,
+      roasPlataforma: s.gasto > 0 ? s.valorCompras / s.gasto : null,
+      clics: s.clics, impresiones: s.impresiones,
+      gastoPendiente: s.pendiente
+    }));
+
+  /* Atípicos por valla de Tukey sobre el CPA. */
+  const cpas = semanas.map(s => s.cpa).filter(v => v != null).sort((a, b) => a - b);
+  let limite = null, mediana = null;
+  if (cpas.length >= 4) {
+    const q = p => {
+      const i = (cpas.length - 1) * p, b = Math.floor(i), r = i - b;
+      return cpas[b] + (cpas[b + 1] !== undefined ? (cpas[b + 1] - cpas[b]) * r : 0);
+    };
+    mediana = q(0.5);
+    limite = q(0.75) + ATIPICOS.k * (q(0.75) - q(0.25));
+    semanas.forEach(s => { s.fueraDeRango = s.cpa != null && s.cpa > limite; });
+  }
+
+  return {
+    semanas, mediana, limite, k: ATIPICOS.k,
+    nota: 'Semanas tal como las reporta Meta (miércoles a martes), no semanas ISO.',
+    totales: {
+      gasto: semanas.reduce((a, s) => a + s.gasto, 0),
+      compras: semanas.reduce((a, s) => a + s.compras, 0),
+      clics: semanas.reduce((a, s) => a + s.clics, 0),
+      impresiones: semanas.reduce((a, s) => a + s.impresiones, 0)
+    }
+  };
+}
+
 function cargarGoogle(archivos) {
   const dias = [];
+  const fmt = formatoDe(archivos, ['Fecha', 'Coste']);
   for (const { filas: brutas } of archivos) {
     for (const o of aObjetos(brutas, ['Fecha', 'Coste'])) {
       const f = fecha(columna(o, 'Fecha'));
-      const coste = numero(columna(o, 'Coste'));
+      const coste = numero(columna(o, 'Coste'), fmt);
       if (!f || coste == null) continue;
       dias.push({
         fecha: f, coste,
-        conversiones: numero(columna(o, 'Conversiones')),
-        valorConversion: numero(columna(o, 'Valor de conv.', 'Valor de conversion')),
-        clics: numero(columna(o, 'Clics'))
+        conversiones: numero(columna(o, 'Conversiones'), fmt),
+        valorConversion: numero(columna(o, 'Valor de conv.', 'Valor de conversion'), fmt),
+        clics: numero(columna(o, 'Clics'), fmt)
       });
     }
   }
@@ -201,7 +295,12 @@ function inversionEnVentana(campanas, google, desde, hasta) {
     total: meta + googleGasto,
     meta, google: googleGasto, excluidoB2B,
     campanasPendientes: pendientes,
-    gastoDirecto, gastoGeneral
+    gastoDirecto, gastoGeneral,
+    /* Para la dona: reparto de la INVERSIÓN por plataforma, no de las ventas. */
+    plataformas: [
+      { nombre: 'Meta Ads', valor: meta },
+      { nombre: 'Google Ads', valor: googleGasto }
+    ].filter(p => p.valor > 0)
   };
 }
 
@@ -291,9 +390,24 @@ function armarPeriodo({ lineas, campanas, google, etiqueta, rango, comparativo, 
   });
 
   const sc = buckets[SIN_CLASIFICAR];
+  const ingresoNeto = categorias.reduce((a, c) => a + c.ingresoNeto, 0);
+
+  /* MER medido contra el ingreso real de Shopify, no contra el valor de
+     conversión que reporta cada plataforma. Es la única lectura que no
+     sobreestima: las plataformas se atribuyen ventas que se solapan entre sí. */
+  const baseMer = MER.base === 'meta' ? inversion.meta : inversion.total;
+  const mer = {
+    base: MER.base,
+    etiquetaBase: MER.base === 'meta' ? 'inversión Meta' : 'inversión total en pauta',
+    valor: baseMer > 0 ? ingresoNeto / baseMer : null,
+    inversionBase: baseMer,
+    valorTotal: inversion.total > 0 ? ingresoNeto / inversion.total : null,
+    inversionTotal: inversion.total
+  };
 
   return {
     etiqueta, rango, comparativo, desde, hasta,
+    mer,
     inversionPauta: inversion,
     presupuestoPauta: presupuesto,
     metaIngresoNeto: metaIngreso,
@@ -345,6 +459,10 @@ function main() {
   const google = cargarGoogle(entrada.google);
   if (!entrada.meta.length) aviso('alto', 'Sin datos de Meta Ads', 'No hay export de Meta en data/entrada/: la inversión en pauta queda incompleta.');
 
+  /* Solo las 4 categorías: es el mismo alcance que el KPI hero. Lo que cae en
+     "Sin clasificar" se reporta aparte, nunca sumado por dentro. */
+  const enCategoria = l => CATEGORIAS.includes(l.bucket);
+
   /* --- ventanas de tiempo, a partir de la última fecha con ventas --- */
   const fechas = lineas.map(l => l.fecha).sort();
   const ultima = fechas[fechas.length - 1];
@@ -352,9 +470,6 @@ function main() {
   const inicioMes = ultima.slice(0, 8) + '01';
 
   const semanaPrevia = semanaISO(restarDias(sem.lunes, 1));
-  /* Solo las 4 categorías: es el mismo alcance que el KPI hero. Lo que cae en
-     "Sin clasificar" se reporta aparte, nunca sumado por dentro. */
-  const enCategoria = l => CATEGORIAS.includes(l.bucket);
   const netoEn = (d, h) => lineas.filter(l => enCategoria(l) && l.fecha >= d && l.fecha <= h)
     .reduce((a, l) => a + l.ingresoBruto - l.descuento, 0);
 
@@ -395,29 +510,107 @@ function main() {
       enMes: s.domingo >= inicioMes ? (s.lunes >= inicioMes ? 'completa' : 'parcial') : null
     }));
 
-  /* --- atribución: NO se puede armar con estas columnas --- */
+  /* --- lectura semanal de pauta (Meta) --- */
+  const pauta = lecturaPauta(campanas);
+
+  /* --- la dona ya no reparte ventas sino INVERSIÓN entre plataformas --- */
   const atribucion = {
     disponible: false,
-    motivo: 'El export de ventas de Shopify no trae columna de canal, así que no se puede repartir el ingreso entre pauta, orgánico y otro.',
-    faltante: 'Añade al export de Shopify una columna de canal por pedido (por ejemplo el canal de venta o utm_source/utm_medium). Con eso se reactivan la dona, la serie apilada por canal, el margen bruto de pauta y el múltiplo invertido.',
+    modo: 'inversion',
+    motivo: 'El export de ventas de Shopify no trae canal por pedido, así que el ingreso no se puede repartir entre pauta, orgánico y otro.',
+    faltante: 'Para abrir el ingreso por canal hace falta una columna de canal por pedido en el export de Shopify (canal de venta, o utm_source/utm_medium).',
     seniales: {
       googleValorConversion: google.reduce((a, d) => a + (d.valorConversion || 0), 0) || null,
-      metaValorConversion: null
+      metaValorCompras: pauta.semanas.reduce((a, s) => a + (s.roasPlataforma || 0) * s.gasto, 0) || null,
+      /* Ingreso neto de TODO el rango cargado, para poder contrastarlo con lo
+         que se atribuyen las plataformas, que también cubre todo el rango. */
+      ingresoNetoRango: null
     }
   };
+
+  /* El valor de conversión de las plataformas cubre todo el archivo, así que
+     se compara contra el ingreso neto de todo el archivo, no contra el mes. */
+  const netoTotal = lineas.filter(enCategoria)
+    .reduce((a, l) => a + l.ingresoBruto - l.descuento, 0);
+  atribucion.seniales.ingresoNetoRango = netoTotal;
+
   aviso('alto', 'Sin atribución por canal',
-    'Faltan 4 lecturas del dashboard: dona de canal, columnas apiladas por canal, margen bruto de pauta y múltiplo invertido. Ninguno de los 4 archivos trae ingreso atribuido a Meta.');
+    'El ingreso no se puede abrir por origen: la dona muestra el reparto de la inversión entre plataformas, y el margen bruto de pauta y el múltiplo invertido quedan sin dato. ' + atribucion.faltante);
+  const sumaPlataformas = (atribucion.seniales.googleValorConversion || 0) +
+                          (atribucion.seniales.metaValorCompras || 0);
+  if (netoTotal > 0 && sumaPlataformas > netoTotal) {
+    aviso('alto', 'Las plataformas se atribuyen más ventas de las que hubo',
+      `Meta y Google suman ${Math.round(sumaPlataformas / netoTotal * 100)}% del ingreso neto real entre las dos. Por eso el KPI hero usa MER (ingreso real ÷ inversión) y el ROAS de plataforma solo aparece en la lectura de pauta, marcado como dato reportado por Meta.`);
+  }
 
   if (!METAS.ingresoNetoSemana && !METAS.ingresoNetoMes) {
     aviso('medio', 'Sin metas comerciales',
       'No hay meta de ingreso ni presupuesto de pauta en scripts/config.mjs → METAS. El KPI se muestra sin semáforo de cumplimiento.');
   }
+  const sinVentas = CATEGORIAS.filter(c =>
+    periodos.mes.categorias.find(x => x.nombre === c).unidades === 0);
+  if (sinVentas.length) {
+    aviso('medio', 'Categorías sin ventas en el periodo',
+      `${sinVentas.join(', ')} no tienen unidades en los archivos cargados. Aparecen en cero, no ocultas.`);
+  }
+
+  const refsExcluidasVistas = Object.keys(excluidas.porReferencia);
+  if (!refsExcluidasVistas.length) {
+    aviso('medio', 'Las referencias excluidas no aparecen en esta carga',
+      `${Object.keys(REFERENCIAS_EXCLUIDAS).join(' y ')} no salen en el export de Shopify de este periodo, así que la exclusión no cambió ningún número. La regla sigue activa para cargas futuras.`);
+  }
+
+  /* Las campañas que config.mjs asigna directo a una categoría pueden no
+     existir en este export. Si además hay campañas cuyo nombre sí menciona una
+     categoría, se listan como candidatas para que alguien las confirme: no se
+     asignan solas, porque adivinar el mapeo por el nombre es justo lo que no
+     se debe hacer. */
+  const nombresConGasto = new Set(campanas.filter(c => c.gasto > 0).map(c => c.nombre));
+  const configuradas = Object.keys(CAMPANAS_POR_CATEGORIA);
+  const configuradasAusentes = configuradas.filter(n => !nombresConGasto.has(n));
+
+  const candidatas = new Map();
+  for (const c of campanas) {
+    if (c.clase.tipo !== 'general' || !c.gasto) continue;
+    const n = normalizar(c.nombre);
+    for (const [clave, categoria] of [['short', 'Short'], ['cinturilla', 'Cinturilla'],
+                                      ['brasier', 'Brasier'], ['faja', 'Fajas'],
+                                      ['luxury', 'Fajas'], ['quirurg', 'Fajas']]) {
+      if (n.includes(clave)) {
+        const e = candidatas.get(categoria) || { gasto: 0, campanas: new Set() };
+        e.gasto += c.gasto; e.campanas.add(c.nombre);
+        candidatas.set(categoria, e);
+        break;
+      }
+    }
+  }
+
+  if (configuradasAusentes.length) {
+    aviso('medio', 'Campañas por categoría configuradas que no están en el archivo',
+      `${configuradasAusentes.join(' · ')} no aparecen con gasto en este export, así que todo el presupuesto se prorrateó por unidades.`);
+  }
+  if (candidatas.size) {
+    const detalle = [...candidatas].map(([cat, e]) =>
+      `${cat}: ${e.campanas.size} campañas, ${Math.round(e.gasto).toLocaleString('es-CO')} COP`).join(' · ');
+    aviso('alto', 'Hay campañas que parecen nombradas por categoría',
+      `${detalle}. No se asignaron directo porque el mapeo no está confirmado: hoy ese gasto se prorratea por unidades. Si se confirma, se agregan a scripts/config.mjs → CAMPANAS_POR_CATEGORIA y el costo unitario de pauta por categoría cambia.`);
+  }
+
   aviso('medio', 'Leads sin fuente',
     'El reporte semanal manual de Kuvady no está entre los archivos de entrada; el bloque de leads queda vacío.');
 
+  if (pauta.semanas.some(s2 => s2.fueraDeRango)) {
+    const fuera = pauta.semanas.filter(s2 => s2.fueraDeRango);
+    aviso('alto', 'Semanas de pauta fuera de rango',
+      `${fuera.map(s2 => dia(s2.desde)).join(' y ')}: el CPA se sale de la valla estadística (Q3 + ${ATIPICOS.k}·IQR = ${Math.round(pauta.limite).toLocaleString('es-CO')}) frente a una mediana de ${Math.round(pauta.mediana).toLocaleString('es-CO')}. Están resaltadas en la lectura de pauta.`);
+  }
+
+  const hayCostos = costos.filas.length > 0;
   for (const p of Object.values(periodos)) {
     for (const c of p.categorias) {
-      if (c.cobertura.pct != null && c.cobertura.pct < 1) {
+      /* Si no hay archivo de costos, la cobertura es 0 en todo: ya lo dice el
+         aviso general y repetirlo por categoría solo hace ruido. */
+      if (hayCostos && c.unidades > 0 && c.cobertura.pct != null && c.cobertura.pct < 1) {
         const luxury = c.cobertura.luxuryPendiente ? ' — línea Luxury pendiente de costeo' : '';
         aviso('alto', `Cobertura de costo incompleta · ${c.nombre} (${p.etiqueta})`,
           `Margen calculado sobre ${(c.cobertura.pct * 100).toFixed(0)}% de las unidades${luxury}.`);
@@ -451,9 +644,15 @@ function main() {
       },
       fueraDeAlcance: Object.entries(REFERENCIAS_EXCLUIDAS).map(([r, m]) => `${r} — ${m}`)
     },
-    umbrales: JSON.parse(readFileSync(join(RAIZ, 'data', 'umbrales.json'), 'utf8')),
-    calidad: { avisos, excluidas },
+    umbrales: Object.assign(
+      JSON.parse(readFileSync(join(RAIZ, 'data', 'umbrales.json'), 'utf8')),
+      METAS.merObjetivo
+        ? { mer: { meta: METAS.merObjetivo, alerta: METAS.merAlerta || METAS.merObjetivo * 0.8, direccion: 'mayorMejor' } }
+        : {}
+    ),
+    calidad: { avisos, excluidas, hayCostos: costos.filas.length > 0 },
     atribucion,
+    pauta,
     serieSemanal,
     periodos
   };

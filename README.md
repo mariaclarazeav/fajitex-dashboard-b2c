@@ -3,9 +3,10 @@
 Dashboard diario de resultados digitales B2C. Publicado con GitHub Pages, sin
 paso de compilación: HTML, CSS y JS planos, con Chart.js por CDN.
 
-> **Estado: fase 2 — carga manual.** El repo trae datos de ejemplo sembrados.
-> Para pasar a datos reales, deja los CSV en `data/entrada/` y corre
-> `node scripts/ingesta.mjs`. No hay conexión API todavía.
+> **Estado: datos reales cargados** (Shopify, Meta Ads y Google Ads,
+> 1 jul – 13 sep 2026). Carga manual: los CSV se dejan en `data/entrada/` y se
+> corre `node scripts/ingesta.mjs`. No hay conexión API todavía.
+> Falta el archivo de costos por SKU, así que no hay margen por categoría.
 
 ## ⚠️ Antes de publicar con datos reales
 
@@ -18,10 +19,12 @@ o publica el dashboard en un hosting con autenticación. Los CSV en bruto de
 
 ## Qué muestra
 
-- **Resumen general** — ingreso neto total, inversión en pauta, margen bruto de
-  pauta y múltiplo invertido, cada uno con su estado de semáforo.
-- **Ventas por canal** — participación (dona) y evolución semanal por canal con
-  la línea del total (columnas apiladas + línea).
+- **Resumen general** — ingreso neto total, inversión en pauta, **MER** y CPA de
+  Meta, cada uno con su estado de semáforo.
+- **Inversión y ventas** — reparto de la inversión entre plataformas (dona) e
+  ingreso neto semanal con su línea de tendencia.
+- **Lectura de pauta** — tabla semana a semana de Meta (gasto, compras, CPA, CTR
+  y ROAS de plataforma), con las semanas fuera de rango resaltadas.
 - **Categorías** — Fajas, Short, Cinturilla y Brasier, con drill-down a los
   códigos de descuento usados y las notas del periodo.
 - **Leads por canal** — WhatsApp, Email marketing y SMS. Solo cantidades.
@@ -32,6 +35,8 @@ o publica el dashboard en un hosting con autenticación. Los CSV en bruto de
 | Indicador | Fórmula |
 |---|---|
 | Ingreso neto | Ingreso bruto − descuento aplicado |
+| MER | Ingreso neto de Shopify ÷ inversión en pauta |
+| CPA | Gasto de Meta ÷ compras que reporta Meta |
 | Margen bruto de pauta | Utilidad bruta de pauta ÷ ventas atribuidas a pauta |
 | Múltiplo invertido | Ganancia neta de pauta ÷ inversión en pauta |
 | Costo unitario de pauta | Inversión del periodo rateada por categoría ÷ unidades de la categoría |
@@ -89,7 +94,13 @@ margen bruto de pauta y el múltiplo invertido, que necesitan canal por pedido e
 el export de Shopify. El detalle está en `scripts/README.md`.
 
 Las reglas editables —mapeo de categorías, referencias excluidas, campañas B2B,
-metas comerciales— viven todas en `scripts/config.mjs`.
+metas comerciales, umbral de atípicos del CPA— viven todas en
+`scripts/config.mjs`.
+
+El **MER** es el KPI de eficiencia, no el ROAS de plataforma: en la carga actual
+Meta y Google se atribuyen entre las dos $346,1 M en ventas contra $129,8 M que
+vendió la tienda. El ROAS aparece solo en la lectura de pauta, marcado como dato
+reportado por Meta.
 
 ## Correr en local
 

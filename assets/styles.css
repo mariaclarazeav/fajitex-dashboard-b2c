@@ -458,3 +458,76 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 .kpi__sin-umbral { font-size: 11.5px; color: var(--tinta-suave); font-style: italic; }
+
+/* =============================================================================
+   Fase 2 · MER, reparto de inversión y lectura de pauta
+   ========================================================================== */
+
+/* Cuatro tarjetas de apoyo en vez de tres: 2×2 junto al hero. */
+.resumen { grid-template-columns: 1.1fr 1fr; }
+.kpis { grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr; }
+
+.kpi__marca--nota {
+  color: var(--tinta-suave); background: var(--hairline-alt);
+  border-left-color: var(--gris-claro);
+}
+.kpi[data-estado='meta'] .kpi__marca--nota,
+.kpi[data-estado='alerta'] .kpi__marca--nota,
+.kpi[data-estado='critico'] .kpi__marca--nota { background: rgba(255,255,255,.55); }
+
+/* ------------------------------------------------- tabla lectura de pauta -- */
+.tabla--pauta { font-size: 13.5px; min-width: 620px; }
+.tabla--pauta thead th { padding-block: 9px; }
+.tabla--pauta th:first-child, .tabla--pauta td:first-child { text-align: left; }
+.tabla--pauta tbody td { padding-block: 9px; }
+.tabla--pauta tbody tr:hover { background: var(--hairline-alt); }
+
+.th-nota { font-weight: 400; color: var(--tinta-suave); font-size: 11px; }
+
+.pauta-semana { white-space: nowrap; font-variant-numeric: tabular-nums; position: relative; }
+
+/* La barra vive dentro de la celda: el número y su magnitud en el mismo sitio. */
+.celda-con-barra { position: relative; }
+.celda-barra {
+  position: absolute; right: 10px; bottom: 4px; height: 4px;
+  background: var(--canal-2); border-radius: 1px; opacity: .5;
+}
+.celda-barra--tenue { background: var(--gris-marron); opacity: .3; }
+.celda-con-barra b, .celda-con-barra { font-variant-numeric: tabular-nums; }
+
+.cpa {
+  display: inline-block; padding: 2px 8px; border-radius: 2px;
+  font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.cpa[data-estado='meta']    { color: var(--st-meta-ink);    background: var(--st-meta-tint); }
+.cpa[data-estado='alerta']  { color: var(--st-alerta-ink);  background: var(--st-alerta-tint); }
+.cpa[data-estado='critico'] { color: var(--blanco);         background: var(--st-critico-fill); }
+.cpa[data-estado='nd']      { color: var(--st-nd-ink);      background: var(--st-nd-tint); }
+
+.fila-atipica { background: var(--st-critico-tint); }
+.fila-atipica:hover { background: var(--st-critico-tint); }
+.fila-atipica td { border-bottom-color: rgba(142,60,34,.22); }
+.fila-atipica .pauta-semana { font-weight: 600; }
+
+.marca-atipica {
+  color: var(--st-critico-fill); font-size: 10px; margin-right: 6px;
+  vertical-align: middle;
+}
+
+.tabla--pauta .roas { color: var(--tinta-suave); }
+
+.tabla--pauta tfoot td {
+  border-top: 1px solid var(--hairline); border-bottom: 0;
+  padding-top: 10px; color: var(--tinta-media);
+}
+
+.pauta-aviso {
+  margin-top: 14px; padding: 11px 13px; font-size: 12.5px; line-height: 1.5;
+  color: var(--tinta-media); background: var(--st-alerta-tint);
+  border-left: 3px solid var(--st-alerta-fill); border-radius: 0 2px 2px 0;
+}
+
+@media (max-width: 900px) {
+  .resumen { grid-template-columns: 1fr; }
+  .kpis { grid-template-rows: none; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+}

@@ -88,35 +88,69 @@ export function columna(objeto, ...candidatos) {
   return undefined;
 }
 
-/* Números en formato colombiano ("1.234.567,89"), inglés ("1,234,567.89") o
-   plano. Devuelve null si no hay número, nunca 0 — un 0 inventado se
-   confundiría con un dato real. */
-export function numero(valor) {
-  if (valor == null) return null;
-  let s = String(valor).trim();
-  if (s === '' || s === '-' || s === '--') return null;
-  s = s.replace(/\s/g, '').replace(/[$€]/g, '').replace(/COP/gi, '').replace(/%/g, '');
+/* El punto significa cosas opuestas según el archivo: en el export de Google
+   "179.090 COP" son ciento setenta y nueve mil, y en el de Meta "3.731262" es
+   un CTR con seis decimales. Decidirlo valor por valor es imposible, así que se
+   decide UNA VEZ por archivo, mirando el conjunto de sus números. */
+export function detectarFormato(valores) {
+  const muestra = valores
+    .map(v => limpiarNumero(v))
+    .filter(v => v && /\d/.test(v));
 
-  const tieneComa = s.includes(','), tienePunto = s.includes('.');
-  if (tieneComa && tienePunto) {
-    /* El separador decimal es el último que aparece. */
-    s = s.lastIndexOf(',') > s.lastIndexOf('.')
-      ? s.replace(/\./g, '').replace(',', '.')
-      : s.replace(/,/g, '');
-  } else if (tieneComa) {
-    /* "1,234" con 3 dígitos tras la coma es separador de miles. */
-    s = /,\d{3}$/.test(s) ? s.replace(/,/g, '') : s.replace(',', '.');
-  } else if (tienePunto && /\.\d{3}$/.test(s) && s.split('.').length > 1 && !/^\d+\.\d{1,2}$/.test(s)) {
-    s = s.replace(/\./g, '');
+  /* 1. Si algún valor trae los dos separadores, manda el último que aparece. */
+  for (const v of muestra) {
+    const c = v.lastIndexOf(','), p = v.lastIndexOf('.');
+    if (c !== -1 && p !== -1) return c > p ? 'coma' : 'punto';
   }
+  /* 2. Coma con 1 o 2 decimales al final: decimal a la colombiana. */
+  if (muestra.some(v => /,\d{1,2}$/.test(v))) return 'coma';
+  /* 3. Punto con 1-2 decimales al final, o con 4 o más: decimal a la inglesa. */
+  if (muestra.some(v => /\.\d{1,2}$/.test(v) || /\.\d{4,}/.test(v))) return 'punto';
+  /* 4. Solo puntos con grupos exactos de 3: separador de miles. */
+  if (muestra.some(v => /\.\d{3}$/.test(v))) return 'coma';
+  return 'punto';
+}
+
+function limpiarNumero(valor) {
+  if (valor == null) return '';
+  return String(valor)
+    .normalize('NFKC')                    /* el espacio duro de "179.090 COP" */
+    .replace(/\s/g, '')
+    .replace(/[$€]/g, '').replace(/COP/gi, '').replace(/%/g, '')
+    .trim();
+}
+
+/* Devuelve null si no hay número, nunca 0: un 0 inventado se confundiría con
+   un dato real. `formato` viene de detectarFormato() sobre el mismo archivo. */
+export function numero(valor, formato) {
+  let s = limpiarNumero(valor);
+  if (s === '' || s === '-' || s === '--') return null;
+
+  s = formato === 'coma'
+    ? s.replace(/\./g, '').replace(',', '.')
+    : s.replace(/,/g, '');
+
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
 
 /* Fechas: ISO (2026-09-11), d/m/aaaa y m/d/aaaa. Devuelve 'YYYY-MM-DD'. */
+const MESES_ES = {
+  ene: 1, enero: 1, feb: 2, febrero: 2, mar: 3, marzo: 3, abr: 4, abril: 4,
+  may: 5, mayo: 5, jun: 6, junio: 6, jul: 7, julio: 7, ago: 8, agosto: 8,
+  sep: 9, sept: 9, septiembre: 9, oct: 10, octubre: 10, nov: 11, noviembre: 11,
+  dic: 12, diciembre: 12
+};
+
 export function fecha(valor) {
   if (!valor) return null;
-  const s = String(valor).trim();
+  const s = String(valor).normalize('NFKC').trim();
+
+  /* Google exporta "mié, 1 jul 2026": se quita el día de la semana y se
+     traduce el mes, porque Date() no entiende abreviaturas en español. */
+  const esp = normalizar(s).replace(/^[a-z]{3,10}\.?,\s*/, '')
+    .match(/^(\d{1,2})\s+([a-z]+)\.?\s+(\d{4})$/);
+  if (esp && MESES_ES[esp[2]]) return iso(+esp[3], MESES_ES[esp[2]], +esp[1]);
 
   let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) return iso(+m[1], +m[2], +m[3]);

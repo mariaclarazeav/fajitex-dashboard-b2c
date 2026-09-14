@@ -29,7 +29,11 @@
   var nfDecimal2 = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   function pesos(v)     { return nfPesos.format(Math.round(v)); }
-  function millones(v)  { return '$' + nfDecimal1.format(v / 1e6) + ' M'; }
+  /* Bajo 100 mil, "$0,0 M" no dice nada: se muestra la cifra en pesos. */
+  function millones(v) {
+    if (v == null) return '—';
+    return Math.abs(v) < 100000 ? pesos(v) : '$' + nfDecimal1.format(v / 1e6) + ' M';
+  }
   function entero(v)    { return nfEntero.format(Math.round(v)); }
   function pct(v, dec)  { return (dec ? nfDecimal1.format(v * 100) : nfEntero.format(Math.round(v * 100))) + '%'; }
   function conSigno(v)  { return (v >= 0 ? '+' : '−') + nfDecimal1.format(Math.abs(v) * 100) + '%'; }
@@ -331,6 +335,7 @@
     renderCanales(v);
     renderCombinada(v);
     renderCategorias(v);
+    renderPauta();
     renderLeads(v);
   }
 
@@ -442,11 +447,10 @@
   /* ----------------------------------------------------------- KPI apoyo -- */
   function renderKpis(v) {
     var inv = v.inversion;
+    var mer = v.base.mer;
+    var pauta = D.pauta;
 
-    /* Desglose de la inversión: de dónde sale y qué quedó fuera o pendiente. */
     var detalleInv = [];
-    /* "Meta" a secas se confunde con la meta comercial: siempre "Meta Ads".
-       El desglose solo aparece cuando de verdad hay más de una fuente. */
     if (inv.google) {
       if (inv.meta) detalleInv.push('Meta Ads ' + millones(inv.meta));
       detalleInv.push('Google Ads ' + millones(inv.google));
@@ -466,6 +470,22 @@
       '</div>';
     }
 
+    /* CPA del periodo: gasto de Meta entre compras que reporta Meta. */
+    var cpa = null, rangoCpa = '';
+    if (pauta && pauta.semanas) {
+      var enRango = pauta.semanas.filter(function (s2) {
+        return s2.hasta >= v.base.desde && s2.desde <= v.base.hasta;
+      });
+      var g = enRango.reduce(function (a, s2) { return a + s2.gasto; }, 0);
+      var c2 = enRango.reduce(function (a, s2) { return a + s2.compras; }, 0);
+      if (c2 > 0) cpa = g / c2;
+      /* Las semanas de Meta no calzan con el periodo, así que se dice qué
+         tramo cubre de verdad el número en vez de fingir que coincide. */
+      if (enRango.length) {
+        rangoCpa = diaCorto(enRango[0].desde) + ' – ' + diaCorto(enRango[enRango.length - 1].hasta);
+      }
+    }
+
     var tarjetas = [
       {
         etiqueta: 'Inversión en pauta',
@@ -477,22 +497,38 @@
         extra: marcas
       },
       {
+        etiqueta: 'MER · ingreso neto ÷ ' + (mer ? mer.etiquetaBase : 'inversión'),
+        cifra: mer && mer.valor != null ? nfDecimal2.format(mer.valor) + '×' : null,
+        estado: estado(mer && mer.valor, D.umbrales.mer),
+        sinUmbral: 'sin objetivo de MER definido',
+        barra: mer && mer.valor != null ? Math.min(mer.valor, 6) / 6 * 100 : null,
+        detalle: mer && mer.valor != null
+          ? 'Ingreso real de Shopify sobre ' + millones(mer.inversionBase) + '. Contra la inversión total en pauta el MER es ' +
+            nfDecimal2.format(mer.valorTotal) + '×.'
+          : 'No hay inversión cargada para el periodo.',
+        extra: '<div class="kpi__marca kpi__marca--nota">Medido contra ventas reales, no contra el valor de conversión que reporta cada plataforma.</div>'
+      },
+      {
+        etiqueta: 'CPA de Meta',
+        cifra: cpa != null ? pesos(cpa) : null,
+        estado: cpa != null && pauta && pauta.mediana
+          ? (cpa <= pauta.mediana ? 'meta' : cpa <= pauta.limite ? 'alerta' : 'critico')
+          : 'nd',
+        barra: cpa != null && pauta && pauta.limite ? Math.min(cpa / (pauta.limite * 1.2), 1) * 100 : null,
+        detalle: cpa != null && pauta
+          ? 'Semanas de Meta que tocan el periodo (' + rangoCpa + '). Mediana de las ' +
+            pauta.semanas.length + ' semanas: ' + pesos(pauta.mediana) + '.'
+          : 'Meta no reporta compras en este periodo.',
+        sinUmbral: 'sin semanas suficientes'
+      },
+      {
         etiqueta: 'Margen bruto de pauta',
         cifra: v.margenBrutoPauta != null ? pct(v.margenBrutoPauta, true) : null,
         estado: v.estados.margen,
         barra: v.margenBrutoPauta != null ? v.margenBrutoPauta * 100 : null,
         detalle: v.margenBrutoPauta != null
           ? 'Utilidad bruta ' + millones(v.utilidadBrutaPauta) + ' sobre ventas atribuidas ' + millones(v.ventasAtribuidas)
-          : motivoSinAtribucion()
-      },
-      {
-        etiqueta: 'Múltiplo invertido',
-        cifra: v.multiploInvertido != null ? nfDecimal2.format(v.multiploInvertido) + '×' : null,
-        estado: v.estados.multiplo,
-        barra: v.multiploInvertido != null ? Math.min(Math.max(v.multiploInvertido, 0), 2.5) / 2.5 * 100 : null,
-        detalle: v.multiploInvertido != null
-          ? 'Ganancia neta de pauta ' + millones(v.gananciaNetaPauta) + ' · meta 1,50×'
-          : motivoSinAtribucion()
+          : 'Falta el archivo de costos por SKU y el canal por pedido. Sin eso no hay margen ni múltiplo invertido.'
       }
     ];
 
@@ -531,10 +567,12 @@
   /* ------------------------------------------------------ dona por canal -- */
   function renderCanales(v) {
     var panel = document.getElementById('panel-dona');
+    var modoInversion = D.atribucion && D.atribucion.modo === 'inversion';
+    var plataformas = v.inversion && v.inversion.plataformas;
 
-    if (!v.atribucionOK) {
-      /* Una dona de un solo pedazo no dice nada. En vez de dibujarla, se
-         explica qué falta y cómo se desbloquea. */
+    /* Sin canal por pedido no se puede repartir el INGRESO, pero sí se puede
+       repartir la INVERSIÓN, que es un dato duro de cada plataforma. */
+    if (!v.atribucionOK && !(modoInversion && plataformas && plataformas.length)) {
       panel.innerHTML =
         '<div class="sin-dato">' +
           '<div class="sin-dato__titulo">Sin atribución por canal</div>' +
@@ -545,16 +583,29 @@
       return;
     }
 
+    var esInversion = !v.atribucionOK;
+    var datos = esInversion
+      ? plataformas.map(function (p) { return { nombre: p.nombre, valor: p.valor }; })
+      : v.canales.slice();
+    var total = datos.reduce(function (a, d) { return a + d.valor; }, 0);
+    datos.forEach(function (d) { d.participacion = total > 0 ? d.valor / total : 0; });
+
+    var colores = PALETA.canal.slice(0, datos.length);
+
     panel.innerHTML =
       '<div class="panel__cabecera">' +
-        '<h3 class="panel__titulo">Participación por canal</h3>' +
-        '<p class="panel__sub">Ingreso neto ' + millones(v.ingresoNetoTotal) + ' · ' + v.base.etiqueta.toLowerCase() + '</p>' +
+        '<h3 class="panel__titulo">' + (esInversion ? 'Reparto de la inversión' : 'Participación por canal') + '</h3>' +
+        '<p class="panel__sub">' + (esInversion
+          ? 'Inversión ' + millones(total) + ' · ' + v.base.etiqueta.toLowerCase() + ' · dónde se puso la plata, no de dónde vinieron las ventas'
+          : 'Ingreso neto ' + millones(total) + ' · ' + v.base.etiqueta.toLowerCase()) +
+        '</p>' +
       '</div>' +
       '<div class="lienzo lienzo--dona"><canvas id="grafica-dona"></canvas></div>' +
       '<div class="leyenda" id="leyenda-dona"></div>' +
       '<details class="ver-datos"><summary>Ver datos en tabla</summary>' +
         '<div class="tabla-envoltura"><table class="tabla">' +
-          '<thead><tr><th>Canal</th><th>Ingreso neto</th><th>Participación</th></tr></thead>' +
+          '<thead><tr><th>' + (esInversion ? 'Plataforma' : 'Canal') + '</th><th>' +
+            (esInversion ? 'Inversión' : 'Ingreso neto') + '</th><th>Participación</th></tr></thead>' +
           '<tbody id="tabla-dona"></tbody>' +
         '</table></div>' +
       '</details>';
@@ -562,10 +613,10 @@
     graficas.dona = new Chart(document.getElementById('grafica-dona'), {
       type: 'doughnut',
       data: {
-        labels: CANALES,
+        labels: datos.map(function (d) { return d.nombre; }),
         datasets: [{
-          data: v.canales.map(function (c) { return c.valor; }),
-          backgroundColor: PALETA.canal,
+          data: datos.map(function (d) { return d.valor; }),
+          backgroundColor: colores,
           borderColor: PALETA.superficie,
           borderWidth: 2,
           hoverOffset: 6
@@ -578,24 +629,24 @@
       }
     });
 
-    graficas.dona.$centro = { etiqueta: 'Ingreso neto', valor: millones(v.ingresoNetoTotal) };
+    graficas.dona.$centro = { etiqueta: esInversion ? 'Inversión' : 'Ingreso neto', valor: millones(total) };
     graficas.dona.$contenidoTooltip = function (t) {
-      var i = t.dataPoints[0].dataIndex, c = v.canales[i];
-      return '<div class="tt-titulo">' + c.nombre + '</div>' +
-        filaTT(PALETA.canal[i], 'Ingreso neto', pesos(c.valor)) +
-        '<div class="tt-pie">' + pct(c.participacion, true) + ' del total del periodo</div>';
+      var i = t.dataPoints[0].dataIndex, d = datos[i];
+      return '<div class="tt-titulo">' + d.nombre + '</div>' +
+        filaTT(colores[i], esInversion ? 'Inversión' : 'Ingreso neto', pesos(d.valor)) +
+        '<div class="tt-pie">' + pct(d.participacion, true) + ' del total del periodo</div>';
     };
     graficas.dona.update();
 
-    document.getElementById('leyenda-dona').innerHTML = v.canales.map(function (c, i) {
-      return '<span class="leyenda__item"><i class="leyenda__marca" style="background:' + PALETA.canal[i] + '"></i>' +
-        c.nombre + ' <span class="leyenda__valor">' + pct(c.participacion, true) + '</span></span>';
+    document.getElementById('leyenda-dona').innerHTML = datos.map(function (d, i) {
+      return '<span class="leyenda__item"><i class="leyenda__marca" style="background:' + colores[i] + '"></i>' +
+        d.nombre + ' <span class="leyenda__valor">' + pct(d.participacion, true) + '</span></span>';
     }).join('');
 
-    document.getElementById('tabla-dona').innerHTML = v.canales.map(function (c) {
-      return '<tr><td>' + c.nombre + '</td><td class="num">' + pesos(c.valor) + '</td><td class="num">' + pct(c.participacion, true) + '</td></tr>';
+    document.getElementById('tabla-dona').innerHTML = datos.map(function (d) {
+      return '<tr><td>' + d.nombre + '</td><td class="num">' + pesos(d.valor) + '</td><td class="num">' + pct(d.participacion, true) + '</td></tr>';
     }).join('') +
-      '<tr><td><b>Total</b></td><td class="num"><b>' + pesos(v.ingresoNetoTotal) + '</b></td><td class="num"><b>100,0%</b></td></tr>';
+      '<tr><td><b>Total</b></td><td class="num"><b>' + pesos(total) + '</b></td><td class="num"><b>100,0%</b></td></tr>';
   }
 
   /* ------------------------------------- columnas apiladas + línea total -- */
@@ -683,6 +734,13 @@
         : '<span class="leyenda__item"><i class="leyenda__marca" style="background:' + PALETA.canal[0] + '"></i>Ingreso neto de la semana</span>') +
       '<span class="leyenda__item"><i class="leyenda__marca leyenda__marca--linea"></i>Total de la semana</span>';
 
+    document.getElementById('titulo-combinada').textContent = porCanal
+      ? 'Ventas por canal y crecimiento del total'
+      : 'Ingreso neto por semana';
+    document.getElementById('sub-combinada').textContent = porCanal
+      ? 'Columnas apiladas por canal; la línea es el total de la semana. Ambas series comparten el mismo eje en pesos, así que la trayectoria de la línea es el crecimiento real. La banda marca el tramo que cubre el periodo seleccionado.'
+      : 'Una columna por semana con el ingreso neto, y la línea del mismo total para leer la tendencia. La banda marca el tramo que cubre el periodo seleccionado.';
+
     document.getElementById('nota-combinada').innerHTML = porCanal
       ? 'Semanas calendario de lunes a domingo. El acumulado del mes no equivale a la suma de semanas completas cuando el mes arranca a mitad de semana.'
       : 'Sin canal por pedido la columna no se puede abrir por origen, así que muestra el ingreso neto total de cada semana. ' + (D.atribucion && D.atribucion.faltante ? D.atribucion.faltante : '');
@@ -714,10 +772,33 @@
     var conMargen = cats.filter(function (c) { return c.margenBrutoUnitario != null; });
     var sinMargen = cats.filter(function (c) { return c.margenBrutoUnitario == null; });
 
-    document.getElementById('nota-categorias').innerHTML = sinMargen.length
-      ? '<span class="nota-falta">Sin margen por falta de costos: ' +
-        sinMargen.map(function (c) { return c.nombre; }).join(', ') + '</span>'
+    var panelCat = document.getElementById('panel-categorias');
+    var notaFalta = sinMargen.length
+      ? ' <span class="nota-falta">Sin margen por falta de costos: ' +
+        sinMargen.map(function (c) { return c.nombre; }).join(', ') + '.</span>'
       : '';
+
+    /* Una gráfica de margen sin una sola barra se ve rota. Si ninguna categoría
+       tiene costo cruzado, el panel dice qué falta en vez de dibujar una reja
+       vacía. */
+    if (!conMargen.length) {
+      panelCat.innerHTML =
+        '<div class="sin-dato">' +
+          '<div class="sin-dato__titulo">Sin margen por categoría</div>' +
+          '<p class="sin-dato__texto">Ninguna categoría tiene costo cruzado, así que no hay margen que graficar. Las unidades, el ingreso y el costo unitario de pauta sí están calculados en la tabla de abajo.</p>' +
+          '<p class="sin-dato__accion">Deja el archivo de costos por SKU de la financiera en <code>data/entrada/</code> y vuelve a correr la ingesta: la cobertura de cada categoría aparece sola.</p>' +
+        '</div>';
+      renderFilasCategorias(v, cats);
+      return;
+    }
+
+    panelCat.innerHTML =
+      '<div class="panel__cabecera">' +
+        '<h3 class="panel__titulo">Margen bruto unitario por categoría</h3>' +
+        '<p class="panel__sub">Cada barra lleva su propio color de estado. La línea punteada es el umbral de meta (' +
+          pct(D.umbrales.margenBrutoUnitario.meta) + ').' + notaFalta + '</p>' +
+      '</div>' +
+      '<div class="lienzo lienzo--categorias"><canvas id="grafica-categorias"></canvas></div>';
 
     graficas.categorias = new Chart(document.getElementById('grafica-categorias'), {
       type: 'bar',
@@ -759,11 +840,14 @@
         filaTT('transparent', 'Precio de venta', pesos(c.precioVenta)) +
         filaTT('transparent', 'Costo', pesos(c.costoUnitario)) +
         '<div class="tt-pie">' + ETIQUETA_ESTADO[c.estadoMargen] + ' · umbral de meta ' + pct(D.umbrales.margenBrutoUnitario.meta) + '</div>' +
-        (c.cobertura && c.cobertura.pct != null && c.cobertura.pct < 1
-          ? '<div class="tt-pie">' + textoCobertura(c) + '</div>' : '');
+        (hayCobertura(c) ? '<div class="tt-pie">' + textoCobertura(c) + '</div>' : '');
     };
     graficas.categorias.update();
 
+    renderFilasCategorias(v, cats);
+  }
+
+  function renderFilasCategorias(v, cats) {
     document.getElementById('cat-lista').innerHTML = cats.map(function (c) {
       var abierta = !!abiertas[c.id];
       return '' +
@@ -786,8 +870,7 @@
           '<div class="cat-abrir" aria-hidden="true">' + (abierta ? '−' : '+') + '</div>' +
         '</button>' +
 
-        (c.cobertura && c.cobertura.pct != null && c.cobertura.pct < 1
-          ? '<div class="cat-cobertura">' + textoCobertura(c) + '</div>' : '') +
+        (hayCobertura(c) ? '<div class="cat-cobertura">' + textoCobertura(c) + '</div>' : '') +
 
         '<div class="cat-detalle" id="det-' + c.id + '"' + (abierta ? '' : ' hidden') + '>' +
           '<div class="cat-detalle__rejilla">' +
@@ -875,11 +958,101 @@
 
   function celda(dt, dd) { return '<div><dt>' + dt + '</dt><dd>' + dd + '</dd></div>'; }
 
+  /* La cobertura solo se anuncia si hay costos cargados: si no hay archivo,
+     decir "0% de las unidades" en cada fila repite algo que ya dice el panel. */
+  function hayCobertura(c) {
+    if (!D.calidad || D.calidad.hayCostos === false) return false;
+    return c.cobertura && c.cobertura.pct != null && c.cobertura.pct < 1 && c.unidades > 0;
+  }
+
   /* Nunca se presenta un margen parcial como si fuera definitivo. */
   function textoCobertura(c) {
     var t = 'Margen calculado sobre ' + pct(c.cobertura.pct) + ' de las unidades';
     if (c.cobertura.luxuryPendiente) t += ' — línea Luxury pendiente de costeo';
     return t;
+  }
+
+  /* ------------------------------------------------------ lectura de pauta -- */
+
+  /* Tabla semana a semana de Meta. El dato va codificado dentro de la celda
+     —barra de fondo proporcional, CPA con su color de estado— para que se lea
+     de un vistazo sin tener que comparar números a mano. */
+  function renderPauta() {
+    var seccion = document.getElementById('seccion-pauta');
+    var p = D.pauta;
+
+    if (!p || !p.semanas || !p.semanas.length) { seccion.hidden = true; return; }
+    seccion.hidden = false;
+
+    var maxGasto = Math.max.apply(null, p.semanas.map(function (s2) { return s2.gasto; }));
+    var maxCompras = Math.max.apply(null, p.semanas.map(function (s2) { return s2.compras; }));
+    var maxCtr = Math.max.apply(null, p.semanas.map(function (s2) { return s2.ctr || 0; }));
+
+    function estadoCpa(cpa) {
+      if (cpa == null || p.mediana == null) return 'nd';
+      if (cpa <= p.mediana) return 'meta';
+      return cpa <= p.limite ? 'alerta' : 'critico';
+    }
+
+    function barra(valor, max, clase) {
+      var w = max > 0 ? Math.max(valor / max * 100, 1.5) : 0;
+      return '<span class="celda-barra ' + (clase || '') + '" style="width:' + w.toFixed(1) + '%"></span>';
+    }
+
+    document.getElementById('pauta-nota').innerHTML =
+      p.nota + ' Una semana se marca fuera de rango cuando su CPA supera la valla de Tukey ' +
+      '(Q3 + ' + nfDecimal1.format(p.k) + '·IQR = <b>' + pesos(p.limite) + '</b>), frente a una mediana de <b>' +
+      pesos(p.mediana) + '</b>.';
+
+    document.getElementById('pauta-cuerpo').innerHTML = p.semanas.map(function (s2) {
+      var est = estadoCpa(s2.cpa);
+      return '<tr' + (s2.fueraDeRango ? ' class="fila-atipica"' : '') + '>' +
+        '<td class="pauta-semana">' +
+          (s2.fueraDeRango ? '<span class="marca-atipica" title="CPA fuera de rango">▲</span>' : '') +
+          diaCorto(s2.desde) + ' – ' + diaCorto(s2.hasta) +
+        '</td>' +
+        '<td class="num celda-con-barra">' + barra(s2.gasto, maxGasto) + '<b>' + pesos(s2.gasto) + '</b></td>' +
+        '<td class="num celda-con-barra">' + barra(s2.compras, maxCompras) + entero(s2.compras) + '</td>' +
+        '<td class="num"><span class="cpa" data-estado="' + est + '">' +
+          (s2.cpa != null ? pesos(s2.cpa) : '—') + '</span></td>' +
+        '<td class="num celda-con-barra">' + barra(s2.ctr || 0, maxCtr, 'celda-barra--tenue') +
+          (s2.ctr != null ? pct(s2.ctr, true) : '—') + '</td>' +
+        '<td class="num roas">' + (s2.roasPlataforma != null ? nfDecimal2.format(s2.roasPlataforma) + '×' : '—') + '</td>' +
+      '</tr>';
+    }).join('');
+
+    var t = p.totales;
+    document.getElementById('pauta-pie').innerHTML =
+      '<tr>' +
+        '<td>Total · ' + p.semanas.length + ' semanas</td>' +
+        '<td class="num"><b>' + pesos(t.gasto) + '</b></td>' +
+        '<td class="num"><b>' + entero(t.compras) + '</b></td>' +
+        '<td class="num"><b>' + (t.compras > 0 ? pesos(t.gasto / t.compras) : '—') + '</b></td>' +
+        '<td class="num"><b>' + (t.impresiones > 0 ? pct(t.clics / t.impresiones, true) : '—') + '</b></td>' +
+        '<td class="num roas">—</td>' +
+      '</tr>';
+
+    /* El ROAS de plataforma se muestra, pero con su advertencia al lado. */
+    var se = D.atribucion && D.atribucion.seniales;
+    var aviso = document.getElementById('pauta-roas-aviso');
+    if (se && se.googleValorConversion && se.metaValorCompras && se.ingresoNetoRango) {
+      var suma = se.googleValorConversion + se.metaValorCompras;
+      /* Se compara contra el ingreso de todo el rango cargado, que es el mismo
+         alcance que cubren las cifras de las plataformas. */
+      var neto = se.ingresoNetoRango;
+      aviso.innerHTML = 'El ROAS es el que reporta Meta y no es comparable con el MER. En este rango Meta y Google se ' +
+        'atribuyen <b>' + millones(suma) + '</b> en ventas entre las dos, contra <b>' + millones(neto) +
+        '</b> que vendió la tienda completa: se están apuntando la misma venta más de una vez. Por eso el KPI de arriba ' +
+        'divide el ingreso real de Shopify entre la inversión.';
+    } else {
+      aviso.innerHTML = 'El ROAS es el que reporta Meta sobre sus propias conversiones; no es comparable con el MER.';
+    }
+  }
+
+  function diaCorto(f) {
+    var meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    var partes = f.split('-');
+    return (+partes[2]) + ' ' + meses[+partes[1] - 1];
   }
 
   /* --------------------------------------------------------------- leads -- */
