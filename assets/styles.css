@@ -531,3 +531,135 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .resumen { grid-template-columns: 1fr; }
   .kpis { grid-template-rows: none; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 }
+
+/* =============================================================================
+   Módulo PAUTA PAGA · META
+   Fondo blanco y semáforo verde/amarillo/rojo, como se pidió para este módulo.
+   El resto del tablero conserva el semáforo derivado de la paleta de marca.
+   ========================================================================== */
+
+:root {
+  --sem-verde:    #2E7D4F;
+  --sem-amarillo: #D4A017;
+  --sem-rojo:     #C0392B;
+  --sem-verde-ink:    #1F5C39;
+  --sem-amarillo-ink: #8A6A16;
+  --sem-rojo-ink:     #9B2C1F;
+  --sem-verde-tint:    #E8F2EC;
+  --sem-amarillo-tint: #FAF1DA;
+  --sem-rojo-tint:     #F9E9E7;
+}
+
+.modulo-pauta { background: var(--blanco); }
+.modulo-pauta .panel--blanco { background: var(--blanco); margin-bottom: 16px; }
+.modulo-pauta .panel--blanco:last-of-type { margin-bottom: 0; }
+
+.leyenda-semaforo--pp { padding-bottom: 16px; }
+
+.lienzo--mensual { height: 260px; }
+.lienzo--mezcla  { height: 240px; }
+
+/* ------------------------------------------------------------- tablas ----- */
+.tabla--pp { font-size: 13.5px; min-width: 560px; }
+.tabla--pp tbody td { padding-block: 9px; vertical-align: top; }
+.tabla--pp tbody tr:hover { background: var(--hairline-alt); }
+.tabla--pp tfoot td { border-top: 1px solid var(--hairline); border-bottom: 0; padding-top: 10px; }
+.tabla--cat { min-width: 680px; }
+.tabla--conjuntos { min-width: 820px; }
+
+.pp-sub { display: block; font-size: 11px; color: var(--tinta-suave); font-weight: 400; margin-top: 2px; }
+.pp-punto { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 7px; vertical-align: baseline; }
+
+.pp-var { font-variant-numeric: tabular-nums; font-weight: 600; }
+.pp-var[data-signo='neg'] { color: var(--sem-rojo-ink); }
+.pp-var[data-signo='pos'] { color: var(--sem-verde-ink); }
+
+/* Marcador de dato que falta: visible, nunca un cero ni un guion suelto. */
+.pp-falta {
+  display: inline-block; font-size: 11.5px; font-style: italic; font-weight: 400;
+  color: var(--tinta-suave); background: var(--hairline-alt);
+  border: 1px dashed var(--gris-claro); border-radius: 2px; padding: 2px 7px;
+  white-space: nowrap;
+}
+.pp-falta-inline { color: var(--st-alerta-ink); font-weight: 500; }
+
+/* --------------------------------------------------- semáforo del módulo -- */
+.sem {
+  display: inline-block; padding: 2px 9px; border-radius: 2px;
+  font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.sem[data-estado='verde']    { color: var(--sem-verde-ink);    background: var(--sem-verde-tint); }
+.sem[data-estado='amarillo'] { color: var(--sem-amarillo-ink); background: var(--sem-amarillo-tint); }
+.sem[data-estado='rojo']     { color: var(--blanco);           background: var(--sem-rojo); }
+.sem[data-estado='nd']       { color: var(--st-nd-ink);        background: var(--st-nd-tint); }
+.pp-na { color: var(--tinta-suave); font-size: 12.5px; }
+
+/* Etiqueta B2B / B2C siempre visible en la fila. */
+.pp-linea {
+  display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .03em;
+  padding: 2px 6px; border-radius: 2px; margin-right: 8px; vertical-align: 1px;
+}
+.pp-linea[data-linea='B2C'] { color: var(--st-meta-ink); background: var(--st-meta-tint); }
+.pp-linea[data-linea='B2B'] { color: var(--gris-marron); background: var(--hairline-alt); }
+
+/* ------------------------------------------------------- variaciones ------ */
+.pp-variaciones { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; margin-top: 15px; }
+.pp-variaciones__titulo { font-size: 12.5px; color: var(--tinta-suave); margin-right: 3px; }
+.pp-chip {
+  font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.pp-chip[data-lectura='bueno']  { color: var(--sem-verde-ink);    background: var(--sem-verde-tint); }
+.pp-chip[data-lectura='malo']   { color: var(--sem-rojo-ink);     background: var(--sem-rojo-tint); }
+.pp-chip[data-lectura='neutro'] { color: var(--tinta-media);      background: var(--hairline-alt); }
+
+/* ------------------------------------------------------------ ROAS -------- */
+.pp-roas { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.pp-roas__campo {
+  border: 1px dashed var(--gris-claro); border-radius: 3px; padding: 13px 14px;
+  display: grid; gap: 7px; background: var(--fondo);
+}
+.pp-roas__etiqueta { font-size: 12.5px; color: var(--tinta-media); }
+.pp-roas__valor { font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 15px; letter-spacing: -0.02em; }
+
+/* -------------------------------------------------------- conjuntos ------- */
+.pp-conjuntos > summary {
+  cursor: pointer; list-style: none; font-size: 13.5px; color: var(--tinta-media);
+  display: flex; align-items: center; gap: 8px; padding-block: 2px;
+}
+.pp-conjuntos > summary::-webkit-details-marker { display: none; }
+.pp-conjuntos > summary::before { content: 'Ver más'; font-weight: 600; color: var(--morado); margin-right: 4px; }
+.pp-conjuntos[open] > summary::before { content: 'Ver menos'; }
+.pp-conjuntos > summary:hover { color: var(--tinta); }
+.pp-conjuntos .tabla-envoltura { margin-top: 14px; }
+
+.pp-conj-nombre { font-variant-numeric: tabular-nums; }
+.pp-bandera { margin-right: 6px; }
+.pp-nuevo {
+  display: inline-block; margin-left: 7px; font-size: 10px; font-weight: 600;
+  color: var(--st-meta-ink); background: var(--st-meta-tint); padding: 2px 6px; border-radius: 2px;
+}
+.pp-estado { font-size: 11.5px; color: var(--st-critico-ink); background: var(--st-critico-tint); padding: 2px 7px; border-radius: 2px; }
+.pp-fila-falta td { color: var(--tinta-suave); font-style: italic; }
+
+/* ------------------------------------------------------------ notas ------- */
+.pp-notas { margin: 14px 0 0; padding-left: 17px; font-size: 12.5px; color: var(--tinta-suave); line-height: 1.5; }
+.pp-notas li { margin-bottom: 6px; }
+.pp-pie-nota { margin-top: 12px; font-size: 12.5px; color: var(--tinta-suave); line-height: 1.5; }
+
+.pp-hallazgos {
+  margin-top: 18px; background: var(--chocolate); color: var(--arena);
+  border-radius: 3px; padding: 20px 24px;
+}
+.pp-hallazgos h3 {
+  font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 14px;
+  letter-spacing: -0.02em; color: var(--champagne); margin-bottom: 11px;
+}
+.pp-hallazgos ul { margin: 0; padding-left: 18px; }
+.pp-hallazgos li { margin-bottom: 7px; font-size: 14px; line-height: 1.5; }
+.pp-hallazgos li:last-child { margin-bottom: 0; }
+
+@media (max-width: 720px) {
+  .pp-variaciones { gap: 7px; }
+  .pp-hallazgos { padding: 16px 17px; }
+}

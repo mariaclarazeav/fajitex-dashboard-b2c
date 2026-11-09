@@ -336,6 +336,7 @@
     renderCombinada(v);
     renderCategorias(v);
     renderPauta();
+    renderPautaPaga();
     renderLeads(v);
   }
 
@@ -1053,6 +1054,304 @@
     var meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
     var partes = f.split('-');
     return (+partes[2]) + ' ' + meses[+partes[1] - 1];
+  }
+
+  /* =================================================== PAUTA PAGA · META === */
+
+  var PP = window.FAJITEX_PAUTA_META || null;
+  var PP_COLOR = ['#3A2317', '#8B3A8E', '#B07A2E', '#C9BBA6'];
+  var PP_ANIO  = { a2025: '#C9BBA6', a2026: '#3A2317' };
+
+  /* Donde no hay dato real se escribe el marcador, nunca una estimación. */
+  function ppFalta() { return '<span class="pp-falta">' + PP.meta.textoPendiente + '</span>'; }
+  function ppVal(v, fmt) {
+    if (v == null) return ppFalta();
+    if (fmt === 'pesos') return pesos(v);
+    if (fmt === 'pct') return pct(v, true);
+    return entero(v);
+  }
+  function ppVar(v) {
+    if (v == null) return '—';
+    return '<span class="pp-var" data-signo="' + (v >= 0 ? 'pos' : 'neg') + '">' + conSigno(v) + '</span>';
+  }
+
+  /* Semáforo del módulo: verde / amarillo / rojo sobre el CPA como % del
+     ticket. Es el único bloque del tablero con este semáforo; el resto usa el
+     derivado de la paleta de marca. */
+  function ppEstadoTicket(p) {
+    if (p == null) return 'nd';
+    var u = PP.umbralCpaTicket;
+    return p <= u.verde ? 'verde' : p <= u.amarillo ? 'amarillo' : 'rojo';
+  }
+
+  function renderPautaPaga() {
+    var sec = document.getElementById('seccion-pp');
+    if (!PP) { sec.hidden = true; return; }
+    sec.hidden = false;
+
+    document.getElementById('pp-fuente').textContent =
+      PP.meta.fuente + ' · actualizado ' + PP.meta.actualizado + '. Comparación 2025 vs 2026 en todos los bloques.';
+
+    var u = PP.umbralCpaTicket;
+    document.getElementById('pp-leyenda').innerHTML =
+      '<span class="muestra"><i style="background:var(--sem-verde)"></i> Verde ≤ ' + pct(u.verde) + '</span>' +
+      '<span class="muestra"><i style="background:var(--sem-amarillo)"></i> Amarillo ' + pct(u.verde) + '–' + pct(u.amarillo) + '</span>' +
+      '<span class="muestra"><i style="background:var(--sem-rojo)"></i> Rojo > ' + pct(u.amarillo) + '</span>' +
+      '<span>Semáforo del CPA como % del ticket. Cubre la tabla de categorías de octubre.</span>';
+
+    ppMensual();
+    ppObjetivos();
+    ppResultados();
+    ppRoas();
+    ppCategorias();
+    ppConjuntos();
+    document.getElementById('pp-hallazgos').innerHTML =
+      PP.hallazgos.map(function (h) { return '<li>' + h + '</li>'; }).join('');
+  }
+
+  /* -------------------------------------------- 1 · inversión mensual ---- */
+  function ppMensual() {
+    var m = PP.mensual, meses = m.meses;
+    var conDato = meses.filter(function (x) { return x.v2025 != null; }).length;
+
+    document.getElementById('pp-mensual-sub').innerHTML =
+      'Total Ene–Oct: <b>' + pesos(m.totales.v2026) + '</b> en 2026 contra <b>' + pesos(m.totales.v2025) +
+      '</b> en 2025 (' + conSigno(m.totales.variacion) + '). Octubre ' + conSigno(m.variacionOctubre) + '.' +
+      (conDato < meses.length
+        ? ' <span class="pp-falta-inline">' + (meses.length - conDato) + ' meses de 2025 sin cargar.</span>' : '');
+
+    graficas.ppMensual = new Chart(document.getElementById('pp-grafica-mensual'), {
+      type: 'bar',
+      data: {
+        labels: meses.map(function (x) { return x.mes; }),
+        datasets: [
+          { label: '2025', data: meses.map(function (x) { return x.v2025; }), backgroundColor: PP_ANIO.a2025, borderRadius: { topLeft: 3, topRight: 3 }, maxBarThickness: 26 },
+          { label: '2026', data: meses.map(function (x) { return x.v2026; }), backgroundColor: PP_ANIO.a2026, borderRadius: { topLeft: 3, topRight: 3 }, maxBarThickness: 26 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: { grid: { display: false }, border: { color: PALETA.grid } },
+          y: { beginAtZero: true, grid: { color: PALETA.grid, drawTicks: false }, border: { display: false },
+               ticks: { padding: 8, callback: function (v) { return '$' + nfEntero.format(v / 1e6) + ' M'; } } }
+        },
+        plugins: { legend: { display: false }, tooltip: opcionesTooltip }
+      }
+    });
+
+    graficas.ppMensual.$contenidoTooltip = function (t) {
+      var i = t.dataPoints[0].dataIndex, x = meses[i];
+      var dif = (x.v2025 != null && x.v2026 != null && x.v2025 !== 0)
+        ? (x.v2026 - x.v2025) / x.v2025 : null;
+      return '<div class="tt-titulo">' + x.mes + '</div>' +
+        filaTT(PP_ANIO.a2025, '2025', x.v2025 != null ? pesos(x.v2025) : 'sin cargar') +
+        filaTT(PP_ANIO.a2026, '2026', pesos(x.v2026)) +
+        '<div class="tt-pie">' + (dif != null ? 'Diferencia ' + conSigno(dif) : 'Sin 2025 para comparar') + '</div>';
+    };
+    graficas.ppMensual.update();
+
+    document.getElementById('pp-leyenda-mensual').innerHTML =
+      '<span class="leyenda__item"><i class="leyenda__marca" style="background:' + PP_ANIO.a2025 + '"></i>2025</span>' +
+      '<span class="leyenda__item"><i class="leyenda__marca" style="background:' + PP_ANIO.a2026 + '"></i>2026</span>';
+
+    document.getElementById('pp-mensual-cuerpo').innerHTML = meses.map(function (x) {
+      var dif = (x.v2025 != null && x.v2025 !== 0) ? (x.v2026 - x.v2025) / x.v2025 : null;
+      return '<tr><td>' + x.mes + '</td>' +
+        '<td class="num">' + (x.v2025 != null ? pesos(x.v2025) : ppFalta()) + '</td>' +
+        '<td class="num">' + pesos(x.v2026) + '</td>' +
+        '<td class="num">' + ppVar(dif) + '</td></tr>';
+    }).join('');
+
+    document.getElementById('pp-mensual-pie').innerHTML =
+      '<tr><td><b>Total Ene–Oct</b></td>' +
+      '<td class="num"><b>' + pesos(m.totales.v2025) + '</b></td>' +
+      '<td class="num"><b>' + pesos(m.totales.v2026) + '</b></td>' +
+      '<td class="num"><b>' + ppVar(m.totales.variacion) + '</b></td></tr>';
+
+    document.getElementById('pp-mensual-notas').innerHTML =
+      m.notas.map(function (n) { return '<li>' + n + '</li>'; }).join('');
+  }
+
+  /* -------------------------------------------- 2 · por objetivo --------- */
+  function ppObjetivos() {
+    var o = PP.objetivos;
+    var totales = o.periodos.map(function (_, i) {
+      return o.filas.reduce(function (a, f) { return a + f.valores[i]; }, 0);
+    });
+
+    graficas.ppObjetivos = new Chart(document.getElementById('pp-grafica-objetivos'), {
+      type: 'bar',
+      data: {
+        labels: o.periodos,
+        datasets: o.filas.map(function (f, k) {
+          return {
+            label: f.objetivo,
+            data: f.valores.map(function (v, i) { return totales[i] > 0 ? v / totales[i] * 100 : 0; }),
+            backgroundColor: PP_COLOR[k], stack: 'mezcla',
+            borderColor: PALETA.superficie, borderWidth: { top: 2 }
+          };
+        })
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: { stacked: true, grid: { display: false }, border: { color: PALETA.grid } },
+          y: { stacked: true, beginAtZero: true, max: 100,
+               grid: { color: PALETA.grid, drawTicks: false }, border: { display: false },
+               ticks: { padding: 8, callback: function (v) { return v + '%'; } } }
+        },
+        plugins: { legend: { display: false }, tooltip: opcionesTooltip }
+      }
+    });
+
+    graficas.ppObjetivos.$contenidoTooltip = function (t) {
+      var i = t.dataPoints[0].dataIndex;
+      return '<div class="tt-titulo">' + o.periodos[i] + '</div>' +
+        o.filas.map(function (f, k) {
+          return filaTT(PP_COLOR[k], f.objetivo,
+            pct(totales[i] > 0 ? f.valores[i] / totales[i] : 0, true) + ' · ' + pesos(f.valores[i]));
+        }).join('') +
+        '<div class="tt-pie">Total ' + pesos(totales[i]) + '</div>';
+    };
+    graficas.ppObjetivos.update();
+
+    document.getElementById('pp-leyenda-objetivos').innerHTML = o.filas.map(function (f, k) {
+      return '<span class="leyenda__item"><i class="leyenda__marca" style="background:' + PP_COLOR[k] + '"></i>' + f.objetivo + '</span>';
+    }).join('');
+
+    document.getElementById('pp-objetivos-cabecera').innerHTML =
+      '<tr><th>Objetivo</th>' + o.periodos.map(function (p) { return '<th>' + p + '</th>'; }).join('') + '</tr>';
+
+    document.getElementById('pp-objetivos-cuerpo').innerHTML = o.filas.map(function (f, k) {
+      return '<tr><td><span class="pp-punto" style="background:' + PP_COLOR[k] + '"></span>' + f.objetivo + '</td>' +
+        f.valores.map(function (v, i) {
+          return '<td class="num">' + pesos(v) +
+            '<span class="pp-sub">' + pct(totales[i] > 0 ? v / totales[i] : 0, true) + '</span></td>';
+        }).join('') + '</tr>';
+    }).join('');
+
+    document.getElementById('pp-objetivos-pie').innerHTML =
+      '<tr><td><b>Total</b></td>' + totales.map(function (t) {
+        return '<td class="num"><b>' + pesos(t) + '</b></td>';
+      }).join('') + '</tr>';
+
+    document.getElementById('pp-objetivos-notas').innerHTML =
+      o.notas.map(function (n) { return '<li>' + n + '</li>'; }).join('');
+  }
+
+  /* -------------------------------------------- 3 · resultados ----------- */
+  function ppResultados() {
+    var r = PP.resultados;
+    document.getElementById('pp-resultados-cabecera').innerHTML =
+      '<tr><th></th>' + r.periodos.map(function (p) { return '<th>' + p + '</th>'; }).join('') + '</tr>';
+
+    document.getElementById('pp-resultados-cuerpo').innerHTML = r.filas.map(function (f) {
+      return '<tr><td>' + f.metrica + '</td>' +
+        f.valores.map(function (v) {
+          return '<td class="num">' + (v == null ? '—' : ppVal(v, f.formato)) + '</td>';
+        }).join('') + '</tr>';
+    }).join('');
+
+    document.getElementById('pp-variaciones').innerHTML =
+      '<span class="pp-variaciones__titulo">Oct 2026 vs Oct 2025</span>' +
+      r.variacionOctubre.map(function (v) {
+        var bueno = v.direccion === 'neutro' ? 'neutro'
+          : (v.direccion === 'mayorMejor' ? (v.valor >= 0) : (v.valor <= 0)) ? 'bueno' : 'malo';
+        return '<span class="pp-chip" data-lectura="' + bueno + '">' + v.etiqueta + ' ' + conSigno(v.valor) + '</span>';
+      }).join('');
+
+    document.getElementById('pp-resultados-nota').textContent = r.nota;
+  }
+
+  /* -------------------------------------------- 4 · ROAS octubre --------- */
+  function ppRoas() {
+    var r = PP.roasOctubre;
+    document.getElementById('pp-roas-nota').textContent = r.nota;
+    var campos = [
+      ['ROAS', r.roas], ['Valor de conversión', r.valorConversion],
+      ['Compras totales Meta', r.comprasTotales], ['Ticket (valor ÷ compras)', r.ticket],
+      ['CPA % del ticket', r.cpaPctTicket]
+    ];
+    document.getElementById('pp-roas').innerHTML = campos.map(function (c) {
+      return '<div class="pp-roas__campo"><span class="pp-roas__etiqueta">' + c[0] + '</span>' +
+        '<span class="pp-roas__valor">' + (c[1] == null ? ppFalta() : c[1]) + '</span></div>';
+    }).join('');
+  }
+
+  /* -------------------------------------------- 5 · por categoría -------- */
+  function ppCategorias() {
+    var c = PP.categoriasOctubre;
+    document.getElementById('pp-cat-sub').innerHTML =
+      'Clasificada por nombre del conjunto. Ticket ' + c.tipoTicket + '.';
+    document.getElementById('pp-cat-nota').textContent = c.nota;
+
+    document.getElementById('pp-cat-cuerpo').innerHTML = c.filas.map(function (f) {
+      var est = f.noAplicaTicket ? 'na' : ppEstadoTicket(f.cpaPctTicket);
+      var ticket = f.noAplicaTicket
+        ? '<span class="pp-na">no aplica</span>'
+        : f.cpaPctTicket == null
+          ? ppFalta()
+          : '<span class="sem" data-estado="' + est + '">≈' + pct(f.cpaPctTicket) + '</span>' +
+            (f.ticket ? '<span class="pp-sub">ticket ≈' + pesos(f.ticket) + '</span>' : '');
+
+      return '<tr>' +
+        '<td><span class="pp-linea" data-linea="' + f.linea + '">' + f.linea + '</span>' + f.categoria + '</td>' +
+        '<td class="num">' + pesos(f.inversion) + '</td>' +
+        '<td class="num">' + pct(f.inversion / c.totalMes, true) + '</td>' +
+        '<td class="num">' + (f.resultados == null ? '—' : entero(f.resultados) +
+          (f.tipoResultado ? '<span class="pp-sub">' + f.tipoResultado + '</span>' : '')) + '</td>' +
+        '<td class="num">' + (f.cpa == null ? '—' : pesos(f.cpa) +
+          (f.tipoResultado === 'leads' ? '<span class="pp-sub">por lead</span>' : '')) + '</td>' +
+        '<td class="num">' + ticket + '</td>' +
+      '</tr>';
+    }).join('');
+
+    document.getElementById('pp-cat-pie').innerHTML =
+      '<tr><td><b>Total octubre</b></td><td class="num"><b>' + pesos(c.totalMes) + '</b></td>' +
+      '<td class="num"><b>100,0%</b></td><td class="num"></td><td class="num"></td><td class="num"></td></tr>';
+  }
+
+  /* -------------------------------------------- 6 · conjuntos ------------ */
+  function ppConjuntos() {
+    var c = PP.conjuntos;
+    var filas = c.filas.slice().sort(function (a, b) { return b.inversion - a.inversion; });
+    var cubierto = filas.reduce(function (a, f) { return a + f.inversion; }, 0);
+    var total = PP.categoriasOctubre.totalMes;
+
+    document.getElementById('pp-conjuntos-resumen').innerHTML =
+      'Conjuntos de anuncios de octubre · <b>' + filas.length + ' de ' + c.totalEsperado + '</b> cargados · ' +
+      pesos(cubierto) + ' de ' + pesos(total) + ' (' + pct(cubierto / total) + ')';
+
+    document.getElementById('pp-conjuntos-cuerpo').innerHTML = filas.map(function (f) {
+      var ret = /RET/.test(f.nombre);
+      var nuevo = /^26\/10/.test(f.nombre);
+      return '<tr>' +
+        '<td class="pp-conj-nombre">' +
+          (ret ? '<span class="pp-bandera" title="Atribución más amplia">🚩</span>' : '') +
+          f.nombre +
+          (nuevo ? '<span class="pp-nuevo">nuevo</span>' : '') +
+        '</td>' +
+        '<td>' + (f.estado ? '<span class="pp-estado">' + f.estado + '</span>' : '—') + '</td>' +
+        '<td>' + f.categoria + '</td>' +
+        '<td>' + f.objetivo + '</td>' +
+        '<td class="num">' + entero(f.resultados) + '<span class="pp-sub">' + f.tipoResultado + '</span></td>' +
+        '<td class="num">' + pesos(f.inversion) + '</td>' +
+        '<td class="num">' + pesos(f.inversion / f.resultados) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    document.getElementById('pp-conjuntos-pie').innerHTML =
+      '<tr><td colspan="5"><b>' + filas.length + ' conjuntos cargados</b></td>' +
+      '<td class="num"><b>' + pesos(cubierto) + '</b></td><td></td></tr>' +
+      '<tr class="pp-fila-falta"><td colspan="5">' + (c.totalEsperado - filas.length) +
+      ' conjuntos sin cargar — ' + PP.meta.textoPendiente + '</td>' +
+      '<td class="num">' + pesos(total - cubierto) + '</td><td></td></tr>';
+
+    document.getElementById('pp-conjuntos-nota').innerHTML =
+      c.nota + ' 🚩 marca los conjuntos «RET», con ventana de atribución más amplia que el resto; «nuevo» marca los creados el 26/10, sin datos suficientes.';
   }
 
   /* --------------------------------------------------------------- leads -- */

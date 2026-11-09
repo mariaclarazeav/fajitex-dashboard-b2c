@@ -141,6 +141,120 @@
     </article>
   </section>
 
+  <!-- =============================================== PAUTA PAGA · META === -->
+  <section class="seccion envoltura modulo-pauta" aria-labelledby="t-pp" id="seccion-pp" hidden>
+    <div class="seccion__encabezado">
+      <h2 id="t-pp">Pauta paga · Meta</h2>
+      <p class="seccion__nota" id="pp-fuente"></p>
+    </div>
+
+    <div class="leyenda-semaforo leyenda-semaforo--pp" id="pp-leyenda"></div>
+
+    <!-- 1 · inversión mensual -->
+    <article class="panel panel--blanco">
+      <div class="panel__cabecera">
+        <h3 class="panel__titulo">Inversión mensual · 2025 vs 2026</h3>
+        <p class="panel__sub" id="pp-mensual-sub"></p>
+      </div>
+      <div class="lienzo lienzo--mensual"><canvas id="pp-grafica-mensual"></canvas></div>
+      <div class="leyenda" id="pp-leyenda-mensual"></div>
+      <div class="tabla-envoltura">
+        <table class="tabla tabla--pp">
+          <thead><tr><th>Mes</th><th>2025</th><th>2026</th><th>Variación</th></tr></thead>
+          <tbody id="pp-mensual-cuerpo"></tbody>
+          <tfoot id="pp-mensual-pie"></tfoot>
+        </table>
+      </div>
+      <ul class="pp-notas" id="pp-mensual-notas"></ul>
+    </article>
+
+    <!-- 2 · inversión por objetivo -->
+    <article class="panel panel--blanco">
+      <div class="panel__cabecera">
+        <h3 class="panel__titulo">Inversión por objetivo</h3>
+        <p class="panel__sub">Cada columna suma 100%: lo que cambia es la mezcla, no el tamaño. Septiembre y octubre, 2025 contra 2026.</p>
+      </div>
+      <div class="lienzo lienzo--mezcla"><canvas id="pp-grafica-objetivos"></canvas></div>
+      <div class="leyenda" id="pp-leyenda-objetivos"></div>
+      <div class="tabla-envoltura">
+        <table class="tabla tabla--pp">
+          <thead id="pp-objetivos-cabecera"></thead>
+          <tbody id="pp-objetivos-cuerpo"></tbody>
+          <tfoot id="pp-objetivos-pie"></tfoot>
+        </table>
+      </div>
+      <ul class="pp-notas" id="pp-objetivos-notas"></ul>
+    </article>
+
+    <!-- 3 · resultados por objetivo -->
+    <article class="panel panel--blanco">
+      <div class="panel__cabecera">
+        <h3 class="panel__titulo">Resultados por objetivo</h3>
+        <p class="panel__sub">Solo conjuntos optimizados a cada objetivo.</p>
+      </div>
+      <div class="tabla-envoltura">
+        <table class="tabla tabla--pp">
+          <thead id="pp-resultados-cabecera"></thead>
+          <tbody id="pp-resultados-cuerpo"></tbody>
+        </table>
+      </div>
+      <div class="pp-variaciones" id="pp-variaciones"></div>
+      <p class="pp-pie-nota" id="pp-resultados-nota"></p>
+    </article>
+
+    <!-- 4 · ROAS octubre -->
+    <article class="panel panel--blanco">
+      <div class="panel__cabecera">
+        <h3 class="panel__titulo">ROAS y valor de conversión · octubre 2026</h3>
+        <p class="panel__sub" id="pp-roas-nota"></p>
+      </div>
+      <div class="pp-roas" id="pp-roas"></div>
+    </article>
+
+    <!-- 5 · octubre por categoría -->
+    <article class="panel panel--blanco">
+      <div class="panel__cabecera">
+        <h3 class="panel__titulo">Octubre 2026 por categoría</h3>
+        <p class="panel__sub" id="pp-cat-sub"></p>
+      </div>
+      <div class="tabla-envoltura">
+        <table class="tabla tabla--pp tabla--cat">
+          <thead><tr>
+            <th>Categoría</th><th>Inversión</th><th>% del total</th>
+            <th>Resultados</th><th>CPA</th><th>CPA % ticket</th>
+          </tr></thead>
+          <tbody id="pp-cat-cuerpo"></tbody>
+          <tfoot id="pp-cat-pie"></tfoot>
+        </table>
+      </div>
+      <p class="pp-pie-nota" id="pp-cat-nota"></p>
+    </article>
+
+    <!-- 6 · conjuntos de anuncios -->
+    <article class="panel panel--blanco">
+      <details class="pp-conjuntos" id="pp-conjuntos-det">
+        <summary><span id="pp-conjuntos-resumen"></span></summary>
+        <div class="tabla-envoltura">
+          <table class="tabla tabla--pp tabla--conjuntos">
+            <thead><tr>
+              <th>Nombre</th><th>Estado</th><th>Categoría</th><th>Objetivo</th>
+              <th>Resultados</th><th>Inversión</th><th>Costo por resultado</th>
+            </tr></thead>
+            <tbody id="pp-conjuntos-cuerpo"></tbody>
+            <tfoot id="pp-conjuntos-pie"></tfoot>
+          </table>
+        </div>
+        <p class="pp-pie-nota" id="pp-conjuntos-nota"></p>
+      </details>
+    </article>
+
+    <!-- 7 · hallazgos -->
+    <aside class="pp-hallazgos">
+      <h3>Hallazgos</h3>
+      <ul id="pp-hallazgos"></ul>
+    </aside>
+  </section>
+
   <!-- ============================================================ LEADS === -->
   <section class="seccion envoltura" aria-labelledby="t-leads">
     <div class="seccion__encabezado">
@@ -190,6 +304,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="data/dashboard-data.js"></script>
+<script src="data/pauta-meta.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>
